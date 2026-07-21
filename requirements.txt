@@ -1,0 +1,12 @@
+uv
+ty
+ruff
+pandas
+requests
+marimo[mcp]
+psycopg2-binary
+python-lsp-server
+python-dotenv
+ibm-watsonx-orchestrate==2.11.0
+sqlalchemy
+pydantic-ai

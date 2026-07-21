@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_meta.schema.json",
+  "title": "quiz_meta",
+  "description": "One row per quiz: quiz-level metadata, branding, and prize. Source table data/tables/quiz_meta.csv. quizId is the primary key referenced by scoring.csv, details.csv, and quiz_structure.csv; supplies the `quiz_context` the enrichment template looks up per quiz. The `prize.*` columns together form the optional prize object (all blank when the quiz has no prize, e.g. prize_type 'none').",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "quizId",
+    "title",
+    "brand_name",
+    "language",
+    "status",
+    "prize.prize_name",
+    "prize.prize_url",
+    "prize.prize_value",
+    "prize.prize_currency",
+    "prize.prize_description",
+    "brand_tags",
+    "prize_type"
+  ],
+  "properties": {
+    "quizId": {
+      "description": "Primary key. Referenced by scoring.quizId, details.quizId, quiz_structure.quizId.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "title": {
+      "description": "Quiz title.",
+      "type": "string",
+      "minLength": 1
+    },
+    "brand_name": {
+      "description": "Sponsoring brand name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "description": "ISO 639-2/B three-letter language code of the quiz.",
+      "type": "string",
+      "enum": [
+        "eng",
+        "est",
+        "lav",
+        "lit",
+        "pol"
+      ]
+    },
+    "status": {
+      "description": "Publication status of the quiz.",
+      "type": "string",
+      "enum": [
+        "published",
+        "draft",
+        "archived"
+      ]
+    },
+    "prize.prize_name": {
+      "description": "Name of the prize. Blank/empty when the quiz has no prize.",
+      "type": "string"
+    },
+    "prize.prize_url": {
+      "description": "URL to the prize/promotion page. Blank/empty when absent.",
+      "type": "string",
+      "anyOf": [
+        {
+          "const": ""
+        },
+        {
+          "format": "uri"
+        }
+      ]
+    },
+    "prize.prize_value": {
+      "description": "Monetary value of the prize, in prize.prize_currency units. Blank/empty when there is no value.",
+      "type": "string",
+      "anyOf": [
+        {
+          "const": ""
+        },
+        {
+          "pattern": "^[0-9]+(\\.[0-9]+)?$"
+        }
+      ]
+    },
+    "prize.prize_currency": {
+      "description": "ISO 4217 currency code for prize.prize_value. Blank/empty when there is no monetary value.",
+      "type": "string",
+      "enum": [
+        "",
+        "USD",
+        "EUR",
+        "GBP",
+        "PLN",
+        "NOK",
+        "<other_currency_code>"
+      ]
+    },
+    "prize.prize_description": {
+      "description": "Free-text description of the prize. Blank/empty when absent.",
+      "type": "string"
+    },
+    "brand_tags": {
+      "description": "Brand/topic tags as a JSON-array string, e.g. '[\"sports\",\"apparel\"]'. Parse as JSON to get the list of tag strings.",
+      "type": "string",
+      "pattern": "^\\[.*\\]$"
+    },
+    "prize_type": {
+      "description": "Prize category as a JSON-array string (typically one element), e.g. '[\"product\"]'. The value '[\"none\"]' marks a quiz with no prize. Observed elements: product, experience, subscription, gift-card, voucher, collectible, credit, ticket, none.",
+      "type": "string",
+      "pattern": "^\\[.*\\]$"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[project]
+name = "wxo-profile-discovery-flows"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "docling>=2.114.0",
+    "ibm-watsonx-orchestrate==2.11.0",
+    "marimo[mcp]>=0.23.14",
+    "pandas>=3.0.3",
+    "psycopg2-binary>=2.9.12",
+    "pydantic-ai>=2.14.1",
+    "pymongo>=4.17.0",
+    "python-dotenv>=1.2.2",
+    "python-lsp-server>=1.14.0",
+    "requests>=2.34.2",
+    "ruff>=0.15.22",
+    "sqlalchemy>=2.0.51",
+    "ty>=0.0.61",
+    "uv>=0.11.30",
+]

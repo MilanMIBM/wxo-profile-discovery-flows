@@ -1,0 +1,61 @@
+quizId,quiz_title,submission_id,displayName,email,anonymous,isOwner,submittedAt,correctAnswers,incorrectAnswers,totalAnswered,scorePct,timeSeconds
+c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,1ead5aa0-135e-c365-dd5a-34e28385fd54,Anonymous,temp@k4n9x2p7q1w8z5r3t6y0m4l2.com,True,False,2026-06-20T09:00:00Z,5,0,5,100.0,70
+c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,7fdc5a8b-3b14-85dc-43c7-5d8893874e81,Liene Bērziņa,liene.berzina@example.lv,False,False,2026-06-20T10:07:00Z,3,2,5,60.0,57
+c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,416d4409-c05e-0c73-7130-373b9ee20f76,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-06-20T11:14:00Z,1,4,5,20.0,22
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,d7cce649-d2bc-47cb-9ba6-932814fe0815,Mathias Aune,mathias.aune@example.no,False,False,2026-07-14T11:16:00Z,1,3,4,25.0,60
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,7071c940-da5a-4743-9a63-8633219374a8,Mathias Aune,mathias.aune@example.no,False,False,2026-07-14T13:01:00Z,3,1,4,75.0,65
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,4b9ae294-7de2-4fc3-b25c-eca5e5977add,Mathias Aune,mathias.aune@example.no,False,False,2026-07-14T14:29:00Z,4,0,4,100.0,54
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,33d790c2-f828-4981-8e67-d10bd1521721,Ingrid Solheim,ingrid.solheim@example.no,False,False,2026-07-14T16:57:00Z,2,2,4,50.0,56
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,63b02060-0f47-466b-bacf-c4f421b6c766,Ingrid Solheim,ingrid.solheim@example.no,False,False,2026-07-14T18:33:00Z,4,0,4,100.0,40
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,a3afed03-8ae2-42f6-a906-836b6b5a2e7c,Kwame Mensah,kwame.mensah@demo-inbox.net,False,False,2026-07-14T19:32:00Z,2,2,4,50.0,69
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,6211ffc4-3859-441d-b124-028ffac91fc9,Kwame Mensah,kwame.mensah@demo-inbox.net,False,False,2026-07-14T22:12:00Z,3,1,4,75.0,39
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,b7232ab5-57c8-49ec-8a8f-c71a303e4389,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-07-14T23:31:00Z,4,0,4,100.0,46
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,192655f2-9fed-48c5-80e3-9becaf230108,Liene Berzina,liene.berzina@example.lv,False,False,2026-07-15T00:49:00Z,2,2,4,50.0,40
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,ef22b047-b03c-4475-b75c-5530bcda9c7a,Jonas Kaminski,jonas.kaminski@example.pl,False,False,2026-07-15T01:27:00Z,3,1,4,75.0,53
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,fd19c69d-0692-46e1-afd0-f1d27fad3e45,Emilie Dahl,emilie.dahl@example.no,False,False,2026-07-15T03:27:00Z,0,4,4,0.0,56
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,f0781b34-4878-484b-8c59-b64de9c418fa,Rasmus Nieminen,rasmus.nieminen@example.fi,False,False,2026-07-15T05:09:00Z,3,1,4,75.0,52
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,bfe18da2-c0c7-4ac7-a2e0-bd0847f234cc,Anonymous,temp@184dkmhcw3ckjubnapybfsul.com,True,False,2026-07-15T08:54:00Z,2,2,4,50.0,38
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,2dc81d42-2d0d-47b1-b9e7-81878bfe11e0,Tomas Vaitkus,tomas.vaitkus@example.lt,False,False,2026-07-15T12:07:00Z,3,1,4,75.0,54
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,dc066d74-eebe-44f8-957b-da4c698dd2e9,Anonymous,temp@ct88c29019gd2aqp4x1d6fib.com,True,False,2026-07-15T14:29:00Z,4,0,4,100.0,41
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,ee864749-aa4f-419e-b705-1f56155ea025,Priya Raman,priya.raman@demo-inbox.net,False,False,2026-07-15T15:39:00Z,1,3,4,25.0,69
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,1b563fb0-25b9-4628-a210-e21af7c111d2,Henrik Lovas,henrik.lovas@example.no,False,False,2026-07-15T18:05:00Z,3,1,4,75.0,36
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,a930bc85-8d23-490e-b839-d580eebe4c6d,Katarzyna Nowak,katarzyna.nowak@example.pl,False,False,2026-07-15T20:54:00Z,3,1,4,75.0,46
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,744b01c8-8a09-4ab7-ade8-324ab701adeb,Diego Ferreira,diego.ferreira@demo-inbox.net,False,False,2026-07-15T21:48:00Z,2,2,4,50.0,46
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,8ace2fb2-369e-41f4-81f8-01648b7a39bd,Maarja Tamm,maarja.tamm@example.ee,False,False,2026-07-16T00:07:00Z,4,0,4,100.0,35
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,f26b47b6-31fd-4e23-89b1-019408e05dfe,Anonymous,temp@d9nk1evjbuycq4q57knd2ptr.com,True,False,2026-07-16T03:13:00Z,2,2,4,50.0,66
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,3b2f49ea-17b1-44cc-8e7d-291bfc3e45c4,Oliver Brandt,oliver.brandt@example.de,False,False,2026-07-16T06:55:00Z,1,3,4,25.0,63
+a56c7c4f-be6c-48a1-a8d4-831cc1d7e9c7,Fifa World Cup 2026,e1737d18-ed2d-45d5-8f75-08f6225a9f19,Nadia Haddad,nadia.haddad@demo-inbox.net,False,False,2026-07-16T08:16:00Z,3,1,4,75.0,50
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,ab51f20e-0cbe-4719-9159-76e3a2b41bd2,Mathias Aune,mathias.aune@example.no,False,False,2026-07-18T09:47:00Z,2,3,5,40.0,89
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,18979a3c-41c4-4211-9a42-6ab138fb9166,Mathias Aune,mathias.aune@example.no,False,False,2026-07-18T12:12:00Z,4,1,5,80.0,63
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,9ddc2572-637e-4d67-9dd7-b4bda0fe026f,Mathias Aune,mathias.aune@example.no,False,False,2026-07-18T14:16:00Z,5,0,5,100.0,48
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,951046f5-a745-48c5-9ec9-fdc98ed911e1,Ingrid Solheim,ingrid.solheim@example.no,False,False,2026-07-18T14:50:00Z,2,3,5,40.0,84
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,a92fa4b8-28cf-4bea-9c81-7bc1d3da867f,Ingrid Solheim,ingrid.solheim@example.no,False,False,2026-07-18T16:43:00Z,4,1,5,80.0,57
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,e742a150-c9d9-4193-b16e-ea32e8c27216,Priya Raman,priya.raman@demo-inbox.net,False,False,2026-07-18T17:22:00Z,3,2,5,60.0,79
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,08813d67-2882-413f-b142-20e94b3ef6e6,Priya Raman,priya.raman@demo-inbox.net,False,False,2026-07-18T19:24:00Z,4,1,5,80.0,68
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,fa5e21c9-001f-49db-abb9-135d72c64739,Priya Raman,priya.raman@demo-inbox.net,False,False,2026-07-18T20:10:00Z,5,0,5,100.0,44
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,11734706-07f2-4dec-aa2e-065c18d487df,Oliver Brandt,oliver.brandt@example.de,False,False,2026-07-18T21:06:00Z,4,1,5,80.0,73
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,ac66c244-9976-42d8-9b8f-52f52522e4b9,Oliver Brandt,oliver.brandt@example.de,False,False,2026-07-18T21:28:00Z,5,0,5,100.0,44
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,9d331472-bbb5-48c0-ae03-e566114ee282,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-07-18T23:34:00Z,1,4,5,20.0,132
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,52122b68-be3e-455a-a635-8602d4a73d4c,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-07-19T01:15:00Z,3,2,5,60.0,48
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,440132e9-db1f-405c-860f-80de3c1be8fb,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-07-19T01:53:00Z,4,1,5,80.0,31
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,ac9a4dde-2add-432a-8fdd-c2823b0cbb9f,Daniel Whitmore,daniel.whitmore@example.co.uk,False,False,2026-07-19T04:30:00Z,5,0,5,100.0,84
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,b217178c-ff0c-435d-8088-c2e1f41f0c5e,Daniel Whitmore,daniel.whitmore@example.co.uk,False,False,2026-07-19T05:35:00Z,5,0,5,100.0,51
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,4fe1a2e0-3d7a-4d96-8b3f-1464a7343a99,Chloe Bennett,chloe.bennett@example.co.uk,False,False,2026-07-19T08:19:00Z,3,2,5,60.0,83
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,7e3d95b7-f7ad-474d-a58f-3bc47a8020b8,Chloe Bennett,chloe.bennett@example.co.uk,False,False,2026-07-19T11:03:00Z,4,1,5,80.0,66
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,58f46b80-542a-4580-8f44-0db2eca7880b,Marcus Adeyemi,marcus.adeyemi@demo-inbox.net,False,False,2026-07-19T12:32:00Z,3,2,5,60.0,95
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,e5730d8d-4be9-4138-9410-c609f2e8ec7f,Marcus Adeyemi,marcus.adeyemi@demo-inbox.net,False,False,2026-07-19T15:16:00Z,4,1,5,80.0,43
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,637276bf-7ca0-43ae-a10d-6a4f22a2407a,Marcus Adeyemi,marcus.adeyemi@demo-inbox.net,False,False,2026-07-19T17:45:00Z,5,0,5,100.0,35
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,670a3429-c65f-4dac-a625-ac9c6fb0b6f9,Aoife Gallagher,aoife.gallagher@example.ie,False,False,2026-07-19T19:33:00Z,2,3,5,40.0,68
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,cb42df31-c248-4b6d-928d-4f55095173a7,Aoife Gallagher,aoife.gallagher@example.ie,False,False,2026-07-19T22:12:00Z,3,2,5,60.0,70
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,429e4688-62e6-4004-b227-d1105b9957cc,Ruben Costa,ruben.costa@example.pt,False,False,2026-07-20T00:25:00Z,2,3,5,40.0,94
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,2c84fbf3-a24e-47d9-8aee-699f1d92697d,Ruben Costa,ruben.costa@example.pt,False,False,2026-07-20T01:51:00Z,4,1,5,80.0,64
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,e52e4938-8495-4320-8888-338657d59391,Anonymous,temp@ppynut2bydbgcf995vk1tkhz.com,True,False,2026-07-20T02:36:00Z,4,1,5,80.0,91
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,1d23c6a5-89ba-4a41-994c-d0fc674636fa,Anonymous,temp@ppynut2bydbgcf995vk1tkhz.com,True,False,2026-07-20T05:12:00Z,5,0,5,100.0,33
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,d09eb6b5-b586-48dd-a0bc-324a97b10353,Yuki Tanaka,yuki.tanaka@demo-inbox.net,False,False,2026-07-20T06:25:00Z,2,3,5,40.0,124
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,ea130aae-f6a1-45e3-b711-a741733ab593,Lars Andersen,lars.andersen@example.dk,False,False,2026-07-20T07:37:00Z,4,1,5,80.0,58
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,94285fb1-a672-40c7-ba6a-c56dafb9ce9f,Fatima Zahra,fatima.zahra@demo-inbox.net,False,False,2026-07-20T09:41:00Z,3,2,5,60.0,83
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,dced77ee-4713-4d76-9313-49897f08802a,Anonymous,temp@yqo17tkwv39mfdkleg92lzgt.com,True,False,2026-07-20T11:08:00Z,1,4,5,20.0,104
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,ced28b6f-eaf9-4577-be9b-657623722ba2,Grace O'Donnell,grace.odonnell@example.ie,False,False,2026-07-20T13:35:00Z,4,1,5,80.0,80
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,dc21d876-0a77-46e7-9399-5df8cb79eb94,Stefan Novak,stefan.novak@example.si,False,False,2026-07-20T15:25:00Z,3,2,5,60.0,78
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,df7ab8f6-ec89-447c-9abe-1dcda0699b42,Amara Okafor,amara.okafor@demo-inbox.net,False,False,2026-07-20T16:23:00Z,5,0,5,100.0,63
+3f1c8e42-5a7d-4b19-9e63-c0d84f2a71b5,Chelsea FC Stadium and Museum Tour,3f1ce782-8fec-4139-95b7-7890865fd612,Tobias Lindqvist,tobias.lindqvist@example.se,False,False,2026-07-20T18:12:00Z,3,2,5,60.0,87

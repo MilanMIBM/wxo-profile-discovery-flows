@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_structure.schema.json",
+  "title": "quiz_structure",
+  "description": "One row per question in a quiz: the question bank / answer key. Source table data/tables/quiz_structure.csv. Composite key (quizId, question_number). Joins to details.csv on (quizId, question_number) to grade answers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "quizId",
+    "title",
+    "brand_name",
+    "language",
+    "question_number",
+    "question",
+    "correct_answer",
+    "num_options",
+    "options"
+  ],
+  "properties": {
+    "quizId": {
+      "description": "Quiz this question belongs to. Foreign key to quiz_meta.quizId.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "title": {
+      "description": "Denormalized quiz title, mirrors quiz_meta.title.",
+      "type": "string",
+      "minLength": 1
+    },
+    "brand_name": {
+      "description": "Denormalized brand name, mirrors quiz_meta.brand_name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "description": "ISO 639-2/B three-letter language code of the quiz.",
+      "type": "string",
+      "enum": ["eng", "est", "lav", "lit", "pol"]
+    },
+    "question_number": {
+      "description": "1-based position of this question within the quiz.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "question": {
+      "description": "The question text.",
+      "type": "string",
+      "minLength": 1
+    },
+    "correct_answer": {
+      "description": "The correct option; must be one of the values in `options`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "num_options": {
+      "description": "Number of answer options offered (count of entries in `options`).",
+      "type": "integer",
+      "minimum": 2
+    },
+    "options": {
+      "description": "The answer options as a single ' | '-delimited string (pipe surrounded by spaces), e.g. 'A | B | C | D'. Split on ' | ' to recover the individual options; the count equals num_options.",
+      "type": "string",
+      "pattern": "^.+( \\| .+)+$"
+    }
+  }
+}

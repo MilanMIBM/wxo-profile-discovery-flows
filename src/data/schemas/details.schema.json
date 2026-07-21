@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/details.schema.json",
+  "title": "details",
+  "description": "One row per answered question within a submission: the per-answer detail. Source table data/tables/details.csv. Feeds the `submission_details.json` records; joins to scoring.csv on (quizId, submission_id) and to quiz_structure.csv on (quizId, question_number).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "quizId",
+    "quiz_title",
+    "submission_id",
+    "submittedAt",
+    "question_number",
+    "question",
+    "answer",
+    "correct"
+  ],
+  "properties": {
+    "quizId": {
+      "description": "Quiz this answer belongs to. Foreign key to quiz_meta.quizId / quiz_structure.quizId.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "quiz_title": {
+      "description": "Denormalized quiz title, mirrors quiz_meta.title.",
+      "type": "string",
+      "minLength": 1
+    },
+    "submission_id": {
+      "description": "Submission this answer belongs to. Foreign key to scoring.submission_id.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "submittedAt": {
+      "description": "Submission timestamp, ISO-8601 UTC. Matches scoring.submittedAt for the same submission_id.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "question_number": {
+      "description": "1-based position of the question within the quiz. Foreign key to quiz_structure.question_number for this quizId.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "question": {
+      "description": "The question text as presented. Mirrors quiz_structure.question.",
+      "type": "string",
+      "minLength": 1
+    },
+    "answer": {
+      "description": "The option the respondent selected for this question.",
+      "type": "string",
+      "minLength": 1
+    },
+    "correct": {
+      "description": "Whether the selected answer was correct (answer == quiz_structure.correct_answer).",
+      "type": "boolean"
+    }
+  }
+}

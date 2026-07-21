@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/scoring.schema.json",
+  "title": "scoring",
+  "description": "One row per quiz submission: the per-submission score summary. Source table data/tables/scoring.csv. Rolls up to the `submissions.json` records the enrichment template consumes; keyed to details.csv by (quizId, submission_id).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "quizId",
+    "quiz_title",
+    "submission_id",
+    "displayName",
+    "email",
+    "anonymous",
+    "isOwner",
+    "submittedAt",
+    "correctAnswers",
+    "incorrectAnswers",
+    "totalAnswered",
+    "scorePct",
+    "timeSeconds"
+  ],
+  "properties": {
+    "quizId": {
+      "description": "Quiz this submission belongs to. Foreign key to quiz_meta.quizId / quiz_structure.quizId.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "quiz_title": {
+      "description": "Denormalized quiz title, mirrors quiz_meta.title.",
+      "type": "string",
+      "minLength": 1
+    },
+    "submission_id": {
+      "description": "Unique identifier for this submission. Foreign key referenced by details.submission_id.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "displayName": {
+      "description": "Respondent's display name; the literal 'Anonymous' when the submission is anonymous.",
+      "type": "string",
+      "minLength": 1
+    },
+    "email": {
+      "description": "Respondent email. Anonymous submissions carry a generated placeholder address (temp@... .com).",
+      "type": "string",
+      "format": "email"
+    },
+    "anonymous": {
+      "description": "Whether the respondent submitted anonymously.",
+      "type": "boolean"
+    },
+    "isOwner": {
+      "description": "Whether the respondent is the quiz owner. Always False in the current data.",
+      "type": "boolean"
+    },
+    "submittedAt": {
+      "description": "Submission timestamp, ISO-8601 UTC.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "correctAnswers": {
+      "description": "Number of correct answers in this submission.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "incorrectAnswers": {
+      "description": "Number of incorrect answers in this submission.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "totalAnswered": {
+      "description": "Total questions answered (correctAnswers + incorrectAnswers).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "scorePct": {
+      "description": "Score as a percentage, 0-100 (100 * correctAnswers / totalAnswered).",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "timeSeconds": {
+      "description": "Time taken to complete the submission, in seconds.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}
