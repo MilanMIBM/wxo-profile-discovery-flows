@@ -1,0 +1,12 @@
+spec_version: v1
+kind: connection
+app_id: mongodb-conn-string
+environments:
+    draft:
+        kind: key_value
+        type: team
+        server_url: https://mongodb.local/
+    live:
+        kind: key_value
+        type: team
+        server_url: https://mongodb.local/

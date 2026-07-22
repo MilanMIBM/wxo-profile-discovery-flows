@@ -97,9 +97,20 @@ class LogicBlock:
             )
         return scope.script(**{**self.config, **overrides})
 
-    def run(self, **sandbox):
-        """Invoke the underlying function directly, for unit tests."""
-        return self._fn(**sandbox)
+    def run(block, /, **sandbox):
+        """Invoke the underlying function directly, for unit tests.
+
+        The first parameter is positional-only and named `block`, not `self`, so
+        `self=` stays free for the sandbox name the engine injects:
+
+            my_block.run(flow=..., self=..., json=json)
+        """
+        if block._fn is None:
+            raise TypeError(
+                f"logic block {block.name!r} was loaded from a file and has no "
+                "Python function to run; only its script source is available."
+            )
+        return block._fn(**sandbox)
 
     def __str__(self):
         return self.script
