@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/scoring.schema.json",
-  "title": "scoring",
-  "description": "One row per quiz submission: the per-submission score summary. Source table data/tables/scoring.csv. Rolls up to the `submissions.json` records the enrichment template consumes; keyed to details.csv by (quizId, submission_id).",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_scoring.schema.json",
+  "title": "quiz_scoring",
+  "description": "One row per quiz submission: the per-submission score summary. Source table data/tables/quiz_scoring.csv. Rolls up to the `submissions.json` records the enrichment template consumes; keyed to details.csv by (quizId, submission_id).",
   "type": "object",
   "additionalProperties": false,
   "required": [

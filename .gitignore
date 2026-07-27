@@ -181,3 +181,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 /.claude
+src/data/.DS_Store

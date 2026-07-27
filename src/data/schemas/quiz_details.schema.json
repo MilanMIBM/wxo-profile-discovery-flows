@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/details.schema.json",
-  "title": "details",
-  "description": "One row per answered question within a submission: the per-answer detail. Source table data/tables/details.csv. Feeds the `submission_details.json` records; joins to scoring.csv on (quizId, submission_id) and to quiz_structure.csv on (quizId, question_number).",
+  "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_details.schema.json",
+  "title": "quiz_details",
+  "description": "One row per answered question within a submission: the per-answer detail. Source table data/tables/quiz_details.csv. Feeds the `submission_details.json` records; joins to scoring.csv on (quizId, submission_id) and to quiz_structure.csv on (quizId, question_number).",
   "type": "object",
   "additionalProperties": false,
   "required": [
