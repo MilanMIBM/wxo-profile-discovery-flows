@@ -104,13 +104,20 @@ class LogicBlock:
         `self=` stays free for the sandbox name the engine injects:
 
             my_block.run(flow=..., self=..., json=json)
+
+        Only the names this block actually declares are passed through, so one
+        sandbox dict can drive every block: a block taking (flow, self, json)
+        and one taking (flow, self, parent, json, datetime) both accept the same
+        call. The engine injects the full set regardless; this just keeps the
+        test path from tripping over the difference.
         """
         if block._fn is None:
             raise TypeError(
                 f"logic block {block.name!r} was loaded from a file and has no "
                 "Python function to run; only its script source is available."
             )
-        return block._fn(**sandbox)
+        accepted = inspect.signature(block._fn).parameters
+        return block._fn(**{k: v for k, v in sandbox.items() if k in accepted})
 
     def __str__(self):
         return self.script

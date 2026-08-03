@@ -7,8 +7,7 @@ marimo[mcp]
 psycopg2-binary
 python-lsp-server
 python-dotenv
-ibm-watsonx-orchestrate==2.11.0
+ibm-watsonx-orchestrate==2.13.0
 sqlalchemy
 pydantic-ai
 pymongo
-docling

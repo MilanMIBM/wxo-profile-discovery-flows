@@ -1,0 +1,12 @@
+spec_version: v1
+kind: connection
+app_id: postgres-conn-string
+environments:
+    draft:
+        kind: key_value
+        type: team
+        server_url: https://postgres.local/
+    live:
+        kind: key_value
+        type: team
+        server_url: https://postgres.local/
