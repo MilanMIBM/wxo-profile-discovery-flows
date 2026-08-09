@@ -136,7 +136,7 @@ def _(postgresql_engine):
         f"""
         SELECT DISTINCT "prize.prize_name", "prize.prize_url" FROM "quiz_meta" WHERE "prize.prize_url" IS NOT NULL
         """,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (prize_urls,)
 
@@ -167,75 +167,6 @@ def _():
 @app.cell(column=1, hide_code=True)
 def _():
     mo.md(r"""
-    ### Class definitions
-    """)
-    return
-
-
-@app.class_definition
-class FetchUrlDataOutput(BaseModel):
-    """The converted documents, one string per requested URL."""
-
-    documents: List[str] = Field(
-        ...,
-        description="""The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.""",
-    )
-
-
-@app.class_definition
-class PrizeInfo(BaseModel):
-    brand_name: str = Field(description="Brand that provides the prize.")
-    prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(
-        description="Free-text description of the prize."
-    )
-    prize_value: Decimal = Field(
-        description="Numeric price of the prize, excluding currency. Supports decimals."
-    )
-    prize_currency: str = Field(
-        description="ISO 4217 currency code for the price, e.g. 'USD', 'EUR', 'NOK'."
-    )
-    tag_type: str = Field(
-        description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
-    )
-    number_of_tags: int = Field(
-        description="How many metadata tags to generate."
-    )
-
-
-@app.class_definition
-class Tags(BaseModel):
-    metadata_tags: list[str] = Field(description="Output tags.")
-
-
-@app.class_definition
-class MetadataTags(BaseModel):
-    tags: Tags = Field(
-        description="Object wrapper for the metadata tag output."
-    )
-
-
-@app.class_definition
-class PrizePageContent(BaseModel):
-    """The fetched page text handed to the cleaner."""
-
-    page_content: str = Field(
-        description="""Raw converted page content (Markdown or plain text) for a single prize page, as produced by the fetch_url_data tool."""
-    )
-
-
-@app.class_definition
-class CleanedPrizeDescription(BaseModel):
-    """The prize specification text, stripped of everything else."""
-
-    prize_description: str = Field(
-        description="""The cleaned prize description containing only specification-related content: what the prize is, its physical and technical specs, materials, dimensions, capacities, compatibility, included contents and variants. Empty string if the page contained no prize specifications."""
-    )
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
     ## Python tools
     """)
     return
@@ -246,11 +177,25 @@ def _():
     name="fetch_url_data",
     display_name="Fetch URL Data",
     description="""Fetches one or more URLs and converts each document into Markdown or plain text using Docling. Use this to read the contents of a web page or an online document (PDF, DOCX, PPTX, HTML) so the text can be summarized or analyzed.""",
+    output_schema={
+        "description": "The converted documents, one string per requested URL.",
+        "properties": {
+            "documents": {
+                "description": "The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.",
+                "items": {"type": "string"},
+                "title": "Documents",
+                "type": "array",
+            }
+        },
+        "required": ["documents"],
+        "title": "FetchUrlDataOutput",
+        "type": "object",
+    },
 )
 def fetch_url_data(
     urls: Union[str, List[str]],
     return_markdown_output: bool = True,
-) -> FetchUrlDataOutput:
+) -> dict:
     """Fetches and converts the content of one or more URLs using Docling.
 
     Each URL is downloaded and parsed with Docling's DocumentConverter, then exported
@@ -263,7 +208,7 @@ def fetch_url_data(
         return_markdown_output (bool): True (default) to export Markdown, False for plain text.
 
     Returns:
-        FetchUrlDataOutput: The converted content, one string per requested URL.
+        dict: {"documents": [...]} - the converted content, one string per requested URL.
     """
     from docling.document_converter import DocumentConverter
 
@@ -285,8 +230,7 @@ def fetch_url_data(
                 f"ERROR: {url} could not be converted - {type(exc).__name__}: {exc}"
             )
 
-    return documents
-    # return FetchUrlDataOutput(documents=documents)
+    return {"documents": documents}
 
 
 @app.cell(hide_code=True)
@@ -297,6 +241,16 @@ def _():
     return
 
 
+@app.class_definition
+### build_prompt_extract_prize_details - Input Schema
+class PrizePageContent(BaseModel):
+    """The fetched page text handed to the cleaner."""
+
+    page_content: str = Field(
+        description="""Raw converted page content (Markdown or plain text) for a single prize page, as produced by the fetch_url_data tool."""
+    )
+
+
 @app.function
 def build_prompt_extract_prize_details(aflow: Flow) -> PromptNode:
     extract_prize_details = aflow.prompt(
@@ -305,39 +259,82 @@ def build_prompt_extract_prize_details(aflow: Flow) -> PromptNode:
         description="Reduce a fetched prize text from a url to only its product specification content.",
         system_prompt=[
             """Parse the provided prize content information according to the elements to preserve while dropping the ones specified as irrelevant.
-                - Elements to Preserve: what the product is, model and variant names, materials and construction, dimensions, weight, capacity, power, performance figures, technical and compatibility details, certifications, included contents, available sizes and colours. 
-                - Elements to Drop: navigation, menus, breadcrumbs, cookie and consent banners, legal and privacy text, pricing, stock and delivery information, promotions and discounts, customer reviews and ratings, social and sharing links, newsletter signups, related or recommended products, company and brand marketing copy, and any other page furniture.
-                Preserve the original wording of specs rather than paraphrasing. Do not add headings, commentary, or preamble. If the text contains no product specifications, or begins with 'ERROR:' return 'No Text'""",
+    | Elements to Preserve |: what the product, experience or subject is, model and variant names, materials and construction, dimensions, weight, capacity, power, performance figures, technical and compatibility details, certifications, included contents, available sizes and colours. 
+    | Elements to Drop |: navigation, menus, breadcrumbs, cookie and consent banners, legal and privacy text, pricing, stock and delivery information, promotions and discounts, customer reviews and ratings, social and sharing links, newsletter signups, related or recommended alternative products, company and brand marketing copy, and any other page furniture.
+
+Preserve the original wording of specs rather than paraphrasing. Do not add headings, commentary, or preamble. If the text contains no prize specifications, or begins with 'ERROR:' return 'No Text'. The ideal output is a paragraph of text.""",
         ],
         user_prompt=[
-            """
-                    Fetched prize content:
-                    ---
+            """Fetched prize webpage content:
+---
 
-                    {self.input.page_content}
+{self.input.page_content}
 
-                    ---
-                    """
+---"""
         ],
         llm="groq/openai/gpt-oss-120b",
         llm_parameters={
-            "temperature": 0,
+            "temperature": 0.7,
             "min_new_tokens": 1,
-            "max_new_tokens": 4096,
+            "max_new_tokens": 2048,
             "top_k": 50,
             "top_p": 1,
             "stop_sequences": ["<|return|>"],
         },
         error_handler_config={
             "error_message": "An error has occurred while invoking the LLM",
-            "max_retries": 1,
-            "retry_interval": 1000,
+            "max_retries": 2,
+            "retry_interval": 360,
         },
         input_schema=PrizePageContent,
         output_schema=CleanedPrizeDescription,
     )
 
     return extract_prize_details
+
+
+@app.class_definition
+### build_prompt_extract_prize_details - Output Schema
+class CleanedPrizeDescription(BaseModel):
+    """The prize specification text, stripped of everything else."""
+
+    generated_description: str = Field(
+        description="""The cleaned prize description containing only specification-related content: what the prize is, its physical and technical specs, materials, dimensions, capacities, compatibility, included contents and variants. Empty string if the page contained no prize specifications."""
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
+
+
+@app.class_definition
+### build_prompt_metadata_tag_generation - Input Schema
+class PrizeInfo(BaseModel):
+    brand_name: str = Field(description="Brand that provides the prize.")
+    prize_name: str = Field(description="Name of the prize.")
+    prize_description: str = Field(
+        description="Free-text description of the prize."
+    )
+    generated_description: str = Field(
+        default="",
+        description="Optional cleaned or generated prize description containing only specification-related content.",
+    )
+    prize_value: Decimal = Field(
+        description="Numeric price of the prize, excluding currency. Supports decimals."
+    )
+    prize_currency: str = Field(
+        description="ISO 4217 currency code for the price, e.g. 'USD', 'EUR', 'NOK'."
+    )
+    tag_type: str = Field(
+        description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
+    )
+    number_of_tags: int = Field(
+        description="How many metadata tags to generate."
+    )
 
 
 @app.function
@@ -347,20 +344,19 @@ def build_prompt_metadata_tag_generation(aflow: Flow) -> PromptNode:
         display_name="prize_metadata_tag_generation",
         description="Use data about the prize to generate metadata tags as additional descriptors.",
         system_prompt=[
-            """Generate {self.input.number_of_tags} metadata tags related to the provided prize. Generate tags that match the following descriptor: {self.input.tag_type}."""
+            """Generate {self.input.number_of_tags} metadata tags related to the provided prize. Generate tags that match the following descriptor: {self.input.tag_type}. If there is no prize description, return only one tag - 'not_enough_data'."""
         ],
         user_prompt=[
-            """
-            Brand Name: {self.input.brand_name}
-            Prize Name: {self.input.prize_name}
-            Prize Value: {self.input.prize_value} {self.input.prize_currency}
-            Prize Description:
-            ---
+            """Brand Name: {self.input.brand_name}
+Prize Name: {self.input.prize_name}
+Prize Value: {self.input.prize_value} {self.input.prize_currency}
+Prize Description:
+---
 
-            {self.input.prize_description}
+{self.input.prize_description}
+{self.input.generated_description}
 
-            ---   
-            """
+---"""
         ],
         llm="groq/openai/gpt-oss-120b",
         llm_parameters={
@@ -373,13 +369,26 @@ def build_prompt_metadata_tag_generation(aflow: Flow) -> PromptNode:
         },
         error_handler_config={
             "error_message": "An error has occurred while invoking the LLM",
-            "max_retries": 1,
-            "retry_interval": 1000,
+            "max_retries": 2,
+            "retry_interval": 360,
         },
         input_schema=PrizeInfo,
         output_schema=MetadataTags,
     )
     return metadata_tag_generation
+
+
+@app.class_definition
+### build_prompt_metadata_tag_generation - Input Schema
+class MetadataTags(BaseModel):
+    """Object wrapper for the metadata tag output."""
+
+    class Tags(BaseModel):
+        metadata_tags: list[str] = Field(description="Output tags.")
+
+    tags: Tags = Field(
+        description="Object wrapper for the metadata tag output."
+    )
 
 
 @app.cell(column=2, hide_code=True)
@@ -410,14 +419,16 @@ def _(run_tests, select_prize_url):
 
 @app.cell
 def _(run_tests, test_url_fetch):
-    url_contents = test_url_fetch.content if run_tests.value else None
+    url_contents = test_url_fetch if run_tests.value else None
     url_contents
     return (url_contents,)
 
 
 @app.cell
 def _(url_contents):
-    mo.md(url_contents[0]) if url_contents is not None else None
+    mo.md(
+        url_contents.content["documents"][0]
+    ) if url_contents is not None else None
     return
 
 

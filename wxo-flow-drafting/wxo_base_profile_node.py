@@ -15,8 +15,8 @@ with app.setup:
     import os
 
     from pathlib import Path
-    from typing import Optional
     from pydantic import BaseModel, Field
+    from typing import List, Dict
     from pymongo import MongoClient
     from dotenv import load_dotenv
 
@@ -25,6 +25,35 @@ with app.setup:
         sys.path.insert(0, parent_dir)
 
     from src.helpers.logic_block import logic_block
+
+    class BuildProfilesOutput(BaseModel):
+        """build_respondent_profiles' output.
+
+        Without this, Flow.script() auto-generates an output_schema from the
+        script's `self.output.X = ...` assignments and -- since it can't infer a
+        real type from a plain assignment -- always defaults every field to
+        `string`. That mistypes `profiles` as a string instead of an array, and
+        the foreach's `items` (mapped from this field) receives it accordingly.
+        """
+
+        base_profiles: List[dict] = Field(
+            default_factory=list,
+            description="One profile per respondent, nesting quizzes/submissions/answers.",
+        )
+        # Run counters live on the node's public output rather than flow.private:
+        # flow.private.* requires a private_schema on the @flow decorator, and an
+        # undeclared private write fails inside the first node and kills the run.
+        # Downstream nodes simply ignore them unless mapped in.
+        profiles_num: int = Field(
+            default=0, description="How many profiles were built this run."
+        )
+        uploaded_num: int = Field(
+            default=0, description="Upload counter, zeroed for this run."
+        )
+        preview_inputs: dict = Field(
+            default=dict,
+            description="Preview inputs from the flow for debugging purposes",
+        )
 
 
 @app.cell
@@ -124,11 +153,24 @@ def _(postgresql_engine, rewrite_tables):
     return
 
 
+@app.cell
+def _():
+    retrieve_number = mo.ui.number(
+        label="**Control number of records to retrieve:**",
+        start=0,
+        stop=1000,
+        step=1,
+        value=50,
+    )
+    retrieve_number
+    return (retrieve_number,)
+
+
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, retrieve_number):
     quiz_meta = mo.sql(
         f"""
-        SELECT * FROM "quiz_meta" LIMIT 1000
+        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
         """,
         output=False,
         engine=postgresql_engine,
@@ -137,10 +179,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
-        SELECT * FROM "quiz_structure" LIMIT 1000
+        SELECT * FROM "quiz_structure"
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -149,10 +193,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
-        SELECT * FROM "quiz_details" LIMIT 1000
+        SELECT * FROM "quiz_details" 
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -161,10 +207,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
-        SELECT * FROM "quiz_scoring" LIMIT 1000
+        SELECT * FROM "quiz_scoring"
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -301,7 +349,10 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
+    # Same input shape as the respondent-profile flow: the retrieve_tables
+    # node's table bundle.
     test_flow = {"retrieve_tables": {"output": db_records}}
+    # test_flow = {"output": db_records}
     return (test_flow,)
 
 
@@ -312,30 +363,6 @@ def _():
 
 
 @app.cell(column=1, hide_code=True)
-def _():
-    mo.md(r"""
-    ### Class definitions
-    """)
-    return
-
-
-@app.class_definition
-class RespondentProfileItem(BaseModel):
-    """One respondent profile as iterated by the foreach.
-
-    Loose by design: `extra="allow"` lets the full nested profile that
-    build_respondent_profiles emits (identity, quizzes, submissions, answers)
-    ride through without every level having to be declared here.
-    """
-
-    model_config = {"extra": "allow"}
-
-    respondent_id: Optional[str] = Field(
-        default=None, description="Id of the respondent."
-    )
-
-
-@app.cell(hide_code=True)
 def _():
     mo.md(r"""
     ## Logic blocks
@@ -351,16 +378,27 @@ def _():
 # is no return value -- output happens by assignment. The parameters exist so
 # linters resolve those names; the engine never calls this function.
 #
-# Reads:  the retrieve_tables node's output (scoring + details + quiz_meta)
+# Reads:  the table bundle (scoring + details + quiz_meta) from the flow's own
+#         input -- either nested under "retrieve_tables"
+#         ({"retrieve_tables": {"output": [...]}}) or as the input itself
+#         ({"output": [...]}). This is the first node in the flow, so there is
+#         no upstream node to read from.
 # Writes: self.output.profiles      -- list of base profiles, one per respondent
-#         flow.private.profiles_num -- how many were built
-#         flow.private.uploaded_num -- upload counter, zeroed for this run
+#         self.output.profiles_num  -- how many were built
+#         self.output.uploaded_num  -- upload counter, zeroed for this run
+
 @logic_block(
     display_name="Build respondent profiles",
+    output_schema=BuildProfilesOutput,
 )
-def build_respondent_profiles(flow, self, json):
-    """Collapses the flat quiz tables returned by retrieve_tables into one base profile per respondent, nesting each respondent's quizzes, submissions and answers."""
-    node_out = flow.get("retrieve_tables") or {}
+def build_respondent_profiles(flow, self, parent, json):
+    """Collapses the flat quiz tables passed in as flow input into one base profile per respondent, nesting each respondent's quizzes, submissions and answers."""
+    # Accept the bundle nested under "retrieve_tables" (the caller passing a
+    # retrieval node's context through verbatim) or as the input itself.
+    flow_input = flow["input"] or {}
+    node_out = flow_input.get("retrieve_tables") or flow_input
+    if not isinstance(node_out, dict):
+        node_out = {}
     tables = node_out.get("output")
 
     # The tool returns a bare array; tolerate a wrapped {key: [...]} shape too.
@@ -378,7 +416,7 @@ def build_respondent_profiles(flow, self, json):
     def as_int(value):
         try:
             return int(value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):  # fmt: skip
             return 0
 
     # Truthy across real bools and common string spellings ("true"/"1"/"yes"/"t"):
@@ -547,71 +585,15 @@ def build_respondent_profiles(flow, self, json):
         )
         records.append(prof)
 
-    self.output.profiles = records
-    flow.private.profiles_num = len(records)
-    flow.private.uploaded_num = 0
-
-
-@app.function
-# 🧩 Add whatever the upstream scorers produced onto the respondent profile.
-#
-# Node-name agnostic: reads self.input rather than any named node, so adding
-# or removing a scorer branch needs no change here -- only a data map wiring
-# the new branch's output into this node's input.
-#
-# Reads:  parent._current_item -- the profile for this iteration
-#         self.input.*         -- every scorer's mapped-in output
-# Writes: self.output.profile  -- the profile plus every signal it received
-@logic_block(
-    display_name="Merge profile signals",
-)
-def merge_profile_signals(flow, self, parent, json):
-    """Copies the current respondent profile and layers on every signal handed to this node by the upstream scoring branches, whatever they happen to be."""
-    profile = dict(parent._current_item or {})
-
-    # Keys that identify the record rather than describe it -- never let a
-    # scorer's echoed id overwrite the profile's own fields.
-    skip = ("respondent_id", "context_record_id", "identifier")
-
-    # Flatten one scorer's contribution onto the profile. Each block emits its
-    # raw fields plus _obj / result / result_json wrappers of the same values,
-    # so prefer `result` when present and ignore the redundant rest.
-    def absorb(value):
-        if not isinstance(value, dict):
-            return
-        fields = (
-            value.get("result")
-            if isinstance(value.get("result"), dict)
-            else value
-        )
-        for key, val in fields.items():
-            if key in skip or key.endswith("_obj") or key == "result_json":
-                continue
-            if key == "result":
-                continue
-            # Lists accumulate across scorers (metatags from several sources);
-            # scalars are set outright.
-            if isinstance(val, list):
-                existing = profile.get(key)
-                merged = (
-                    list(existing) if isinstance(existing, list) else []
-                )
-                for item in val:
-                    if item not in merged:
-                        merged.append(item)
-                profile[key] = merged
-            elif val is not None or key not in profile:
-                profile[key] = val
-
-    # self.input holds one entry per mapped-in branch, keyed by whatever the
-    # data map called it. Walk them all rather than naming any.
-    inputs = self["input"] or {}
-    for key, value in inputs.items():
-        if key == "profile":
-            continue
-        absorb(value)
-
-    self.output.profile = profile
+    self.output.base_profiles = records
+    # On the node's public output, not flow.private: private variables exist
+    # only when the @flow decorator declares a private_schema, and an
+    # undeclared private write fails inside this (first) node and kills the
+    # whole run. Downstream nodes ignore these unless mapped in.
+    self.output.profiles_num = len(records)
+    self.output.uploaded_num = 0
+    self.output.preview_inputs = flow_input
+    flow.private.base_profiles = records
 
 
 @app.cell(column=2, hide_code=True)
@@ -661,12 +643,13 @@ def _():
 def _(make_sandbox, run_tests, test_flow):
     if run_tests.value:
         build_sandbox = make_sandbox(
-            {**test_flow, "input": {"identifier": None}}
+            {"input": {"identifier": None, **test_flow}}
         )
         build_respondent_profiles.run(**build_sandbox)
         result = {
-            "profiles": build_sandbox["self"].output.profiles,
-            "private": build_sandbox["flow"].private.as_dict(),
+            "base_profiles": build_sandbox["self"].output.base_profiles,
+            "profiles_num": build_sandbox["self"].output.profiles_num,
+            # "preview_inputs": build_sandbox["self"].output.preview_inputs,
         }
     else:
         result = {}
@@ -686,7 +669,7 @@ def _(result, run_tests, select_user):
         next(
             (
                 i
-                for i, prof in enumerate(result.get("profiles") or [])
+                for i, prof in enumerate(result.get("base_profiles") or [])
                 if prof.get("identity", {}).get("email") == select_user.value
             ),
             None,
@@ -695,9 +678,12 @@ def _(result, run_tests, select_user):
         else None
     )
 
-    result.get("profiles")[
-        _selected_index
-    ] if run_tests.value and _selected_index is not None else None
+    specific_result = (
+        result.get("base_profiles")[_selected_index]
+        if run_tests.value and _selected_index is not None
+        else None
+    )
+    specific_result
     return
 
 

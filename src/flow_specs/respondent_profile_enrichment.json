@@ -4,6 +4,12 @@
     "name": "respondent_profile_enrichment",
     "display_name": "Respondent Profile Enrichment",
     "description": "Builds one profile per quiz respondent from the raw quiz tables, then scores each respondent's sustained engagement level and long-term brand affinity concurrently, returning the profiles enriched with both signals.",
+    "output_schema": {
+      "$ref": "#/schemas/PrizeFlowPrivate"
+    },
+    "private_schema": {
+      "$ref": "#/schemas/PrizeFlowPrivate"
+    },
     "schedulable": false,
     "suppress_agent_summarization": true
   },
@@ -13,20 +19,20 @@
         "kind": "script",
         "name": "build_respondent_profiles",
         "display_name": "Build respondent profiles",
-        "description": "Collapses the flat quiz tables returned by retrieve_tables into one base profile per respondent, nesting each respondent's quizzes, submissions and answers.",
+        "description": "Collapses the flat quiz tables passed in as flow input into one base profile per respondent, nesting each respondent's quizzes, submissions and answers.",
         "output_schema": {
-          "$ref": "#/schemas/build_respondent_profiles_output"
+          "$ref": "#/schemas/BuildProfilesOutput"
         },
-        "fn": "node_out = flow.get(\"retrieve_tables\") or {}\ntables = node_out.get(\"output\")\n\n# The tool returns a bare array; tolerate a wrapped {key: [...]} shape too.\nif isinstance(tables, dict):\n    for key in (\"result\", \"output\", \"value\", \"tables\"):\n        if isinstance(tables.get(key), list):\n            tables = tables[key]\n            break\nif not isinstance(tables, list):\n    tables = []\n\nidentifier = flow[\"input\"].get(\"identifier\")\n\n# Best-effort int, 0 on missing/unparseable.\ndef as_int(value):\n    try:\n        return int(value)\n    except TypeError, ValueError:\n        return 0\n\n# Truthy across real bools and common string spellings (\"true\"/\"1\"/\"yes\"/\"t\"):\n# DB rows arrive typed, CSV-style rows arrive as strings.\ndef as_bool(value):\n    if isinstance(value, bool):\n        return value\n    if isinstance(value, str):\n        return value.strip().lower() in (\"true\", \"1\", \"yes\", \"t\")\n    return bool(value)\n\n# brand_tags / prize_type are stored as JSON-array strings ('[\"a\",\"b\"]') but\n# may also arrive as a real list, empty, or \"[]\". Normalise to a list or None.\ndef parse_tags(value):\n    if value is None:\n        return None\n    if isinstance(value, list):\n        return value or None\n    if isinstance(value, str):\n        s = value.strip()\n        if s in (\"\", \"[]\"):\n            return None\n        try:\n            parsed = json.loads(s)\n        except ValueError:\n            return None\n        return parsed if isinstance(parsed, list) and parsed else None\n    return None\n\nby_table = {t.get(\"table\"): (t.get(\"rows\") or []) for t in tables}\nscoring = by_table.get(\"scoring\") or []\ndetails = by_table.get(\"details\") or []\nquiz_meta = by_table.get(\"quiz_meta\") or []\n\n# Step 1: quiz_context keyed by quizId -- nest the flat prize.* columns into\n# a `prize` object and parse the tag strings into real lists.\nctx = {}\nfor m in quiz_meta:\n    qid = m.get(\"quizId\")\n    if qid is None:\n        continue\n    prize = {\n        \"prize_name\": m.get(\"prize.prize_name\") or None,\n        \"prize_url\": m.get(\"prize.prize_url\") or None,\n        \"prize_value\": m.get(\"prize.prize_value\") or None,\n        \"prize_currency\": m.get(\"prize.prize_currency\") or None,\n        \"prize_description\": m.get(\"prize.prize_description\") or None,\n    }\n    if not any(prize.values()):\n        prize = None\n    ctx[qid] = {\n        \"title\": m.get(\"title\"),\n        \"status\": m.get(\"status\"),\n        \"brand_name\": m.get(\"brand_name\"),\n        \"brand_tags\": parse_tags(m.get(\"brand_tags\")),\n        \"language\": m.get(\"language\"),\n        \"prize\": prize,\n        \"prize_type\": parse_tags(m.get(\"prize_type\")),\n    }\n\n# Step 2: answers grouped by submission_id.\nanswers_by_sub = {}\nfor d in details:\n    sid = d.get(\"submission_id\")\n    if sid is None:\n        continue\n    answers_by_sub.setdefault(sid, []).append(\n        {\n            \"submission_id\": sid,\n            \"question\": d.get(\"question\"),\n            \"answer\": d.get(\"answer\"),\n            \"correct\": as_bool(d.get(\"correct\")),\n        }\n    )\n\n# Step 3: group scoring by respondent (email), bucketing per quiz.\n# One scoring row == one submission. The respondent key is email, falling\n# back to submission_id when email is missing. `quiz_index` maps quizId ->\n# its bucket within the current respondent so repeat submissions accumulate.\nprofiles = {}\norder = []\nfor s in scoring:\n    email = s.get(\"email\")\n    key = email if email is not None else s.get(\"submission_id\")\n    if key not in profiles:\n        profiles[key] = {\n            \"respondent_id\": s.get(\"submission_id\"),\n            \"identity\": {\n                \"display_name\": s.get(\"displayName\"),\n                \"email\": email,\n                \"anonymous\": as_bool(s.get(\"anonymous\")),\n                \"is_owner\": as_bool(s.get(\"isOwner\")),\n                \"placeholder_email\": bool(email)\n                and email.startswith(\"temp@\"),\n            },\n            \"quiz_index\": {},\n            \"quizzes\": [],\n        }\n        order.append(key)\n    prof = profiles[key]\n\n    # anonymous / is_owner: any true across the respondent's rows wins.\n    if as_bool(s.get(\"anonymous\")):\n        prof[\"identity\"][\"anonymous\"] = True\n    if as_bool(s.get(\"isOwner\")):\n        prof[\"identity\"][\"is_owner\"] = True\n\n    # Resolve (or create) this row's quiz bucket, pulling meta from ctx.\n    qid = s.get(\"quizId\")\n    if qid not in prof[\"quiz_index\"]:\n        meta = ctx.get(qid) or {}\n        bucket = {\n            \"quiz_id\": qid,\n            \"title\": meta.get(\"title\"),\n            \"brand_name\": meta.get(\"brand_name\"),\n            \"brand_tags\": meta.get(\"brand_tags\"),\n            \"language\": meta.get(\"language\"),\n            \"prize\": meta.get(\"prize\"),\n            \"prize_type\": meta.get(\"prize_type\"),\n            \"correct\": 0,\n            \"incorrect\": 0,\n            \"time_seconds\": 0,\n            \"submissions\": [],\n            \"answers\": [],\n        }\n        prof[\"quiz_index\"][qid] = bucket\n        prof[\"quizzes\"].append(bucket)\n    bucket = prof[\"quiz_index\"][qid]\n\n    # Metrics for THIS submission, summed into the bucket.\n    c = as_int(s.get(\"correctAnswers\"))\n    i = as_int(s.get(\"incorrectAnswers\"))\n    t = as_int(s.get(\"timeSeconds\"))\n    bucket[\"correct\"] += c\n    bucket[\"incorrect\"] += i\n    bucket[\"time_seconds\"] += t\n\n    # One submission entry + its joined answers.\n    sid = s.get(\"submission_id\")\n    bucket[\"submissions\"].append(\n        {\n            \"submission_id\": sid,\n            \"submitted_at\": s.get(\"submittedAt\"),\n            \"correct\": c,\n            \"incorrect\": i,\n            \"time_seconds\": t,\n        }\n    )\n    for a in answers_by_sub.get(sid, []):\n        bucket[\"answers\"].append(a)\n\n# Step 4: finalize each profile -- per-quiz accuracy, counts, drop scratch.\nrecords = []\nfor key in order:\n    prof = profiles[key]\n    del prof[\"quiz_index\"]\n    for q in prof[\"quizzes\"]:\n        answered = q[\"correct\"] + q[\"incorrect\"]\n        q[\"answered\"] = answered\n        q[\"accuracy\"] = (\n            round(q[\"correct\"] / answered, 4) if answered > 0 else None\n        )\n    prof[\"quizzes_num\"] = len(prof[\"quizzes\"])\n    prof[\"context_record_id\"] = (\n        identifier if identifier is not None else prof[\"respondent_id\"]\n    )\n    records.append(prof)\n\nself.output.profiles = records\nflow.private.profiles_num = len(records)\nflow.private.uploaded_num = 0\n"
+        "fn": "flow_input = flow[\"input\"] or {}\nnode_out = flow_input.get(\"retrieve_tables\") or flow_input\nif not isinstance(node_out, dict):\n    node_out = {}\ntables = node_out.get(\"output\")\n\n# The tool returns a bare array; tolerate a wrapped {key: [...]} shape too.\nif isinstance(tables, dict):\n    for key in (\"result\", \"output\", \"value\", \"tables\"):\n        if isinstance(tables.get(key), list):\n            tables = tables[key]\n            break\nif not isinstance(tables, list):\n    tables = []\n\nidentifier = flow[\"input\"].get(\"identifier\")\n\n# Best-effort int, 0 on missing/unparseable.\ndef as_int(value):\n    try:\n        return int(value)\n    except (TypeError, ValueError):  # fmt: skip\n        return 0\n\n# Truthy across real bools and common string spellings (\"true\"/\"1\"/\"yes\"/\"t\"):\n# DB rows arrive typed, CSV-style rows arrive as strings.\ndef as_bool(value):\n    if isinstance(value, bool):\n        return value\n    if isinstance(value, str):\n        return value.strip().lower() in (\"true\", \"1\", \"yes\", \"t\")\n    return bool(value)\n\n# brand_tags / prize_type are stored as JSON-array strings ('[\"a\",\"b\"]') but\n# may also arrive as a real list, empty, or \"[]\". Normalise to a list or None.\ndef parse_tags(value):\n    if value is None:\n        return None\n    if isinstance(value, list):\n        return value or None\n    if isinstance(value, str):\n        s = value.strip()\n        if s in (\"\", \"[]\"):\n            return None\n        try:\n            parsed = json.loads(s)\n        except ValueError:\n            return None\n        return parsed if isinstance(parsed, list) and parsed else None\n    return None\n\nby_table = {t.get(\"table\"): (t.get(\"rows\") or []) for t in tables}\nscoring = by_table.get(\"scoring\") or []\ndetails = by_table.get(\"details\") or []\nquiz_meta = by_table.get(\"quiz_meta\") or []\n\n# Step 1: quiz_context keyed by quizId -- nest the flat prize.* columns into\n# a `prize` object and parse the tag strings into real lists.\nctx = {}\nfor m in quiz_meta:\n    qid = m.get(\"quizId\")\n    if qid is None:\n        continue\n    prize = {\n        \"prize_name\": m.get(\"prize.prize_name\") or None,\n        \"prize_url\": m.get(\"prize.prize_url\") or None,\n        \"prize_value\": m.get(\"prize.prize_value\") or None,\n        \"prize_currency\": m.get(\"prize.prize_currency\") or None,\n        \"prize_description\": m.get(\"prize.prize_description\") or None,\n    }\n    if not any(prize.values()):\n        prize = None\n    ctx[qid] = {\n        \"title\": m.get(\"title\"),\n        \"status\": m.get(\"status\"),\n        \"brand_name\": m.get(\"brand_name\"),\n        \"brand_tags\": parse_tags(m.get(\"brand_tags\")),\n        \"language\": m.get(\"language\"),\n        \"prize\": prize,\n        \"prize_type\": parse_tags(m.get(\"prize_type\")),\n    }\n\n# Step 2: answers grouped by submission_id.\nanswers_by_sub = {}\nfor d in details:\n    sid = d.get(\"submission_id\")\n    if sid is None:\n        continue\n    answers_by_sub.setdefault(sid, []).append(\n        {\n            \"submission_id\": sid,\n            \"question\": d.get(\"question\"),\n            \"answer\": d.get(\"answer\"),\n            \"correct\": as_bool(d.get(\"correct\")),\n        }\n    )\n\n# Step 3: group scoring by respondent (email), bucketing per quiz.\n# One scoring row == one submission. The respondent key is email, falling\n# back to submission_id when email is missing. `quiz_index` maps quizId ->\n# its bucket within the current respondent so repeat submissions accumulate.\nprofiles = {}\norder = []\nfor s in scoring:\n    email = s.get(\"email\")\n    key = email if email is not None else s.get(\"submission_id\")\n    if key not in profiles:\n        profiles[key] = {\n            \"respondent_id\": s.get(\"submission_id\"),\n            \"identity\": {\n                \"display_name\": s.get(\"displayName\"),\n                \"email\": email,\n                \"anonymous\": as_bool(s.get(\"anonymous\")),\n                \"is_owner\": as_bool(s.get(\"isOwner\")),\n                \"placeholder_email\": bool(email)\n                and email.startswith(\"temp@\"),\n            },\n            \"quiz_index\": {},\n            \"quizzes\": [],\n        }\n        order.append(key)\n    prof = profiles[key]\n\n    # anonymous / is_owner: any true across the respondent's rows wins.\n    if as_bool(s.get(\"anonymous\")):\n        prof[\"identity\"][\"anonymous\"] = True\n    if as_bool(s.get(\"isOwner\")):\n        prof[\"identity\"][\"is_owner\"] = True\n\n    # Resolve (or create) this row's quiz bucket, pulling meta from ctx.\n    qid = s.get(\"quizId\")\n    if qid not in prof[\"quiz_index\"]:\n        meta = ctx.get(qid) or {}\n        bucket = {\n            \"quiz_id\": qid,\n            \"title\": meta.get(\"title\"),\n            \"brand_name\": meta.get(\"brand_name\"),\n            \"brand_tags\": meta.get(\"brand_tags\"),\n            \"language\": meta.get(\"language\"),\n            \"prize\": meta.get(\"prize\"),\n            \"prize_type\": meta.get(\"prize_type\"),\n            \"correct\": 0,\n            \"incorrect\": 0,\n            \"time_seconds\": 0,\n            \"submissions\": [],\n            \"answers\": [],\n        }\n        prof[\"quiz_index\"][qid] = bucket\n        prof[\"quizzes\"].append(bucket)\n    bucket = prof[\"quiz_index\"][qid]\n\n    # Metrics for THIS submission, summed into the bucket.\n    c = as_int(s.get(\"correctAnswers\"))\n    i = as_int(s.get(\"incorrectAnswers\"))\n    t = as_int(s.get(\"timeSeconds\"))\n    bucket[\"correct\"] += c\n    bucket[\"incorrect\"] += i\n    bucket[\"time_seconds\"] += t\n\n    # One submission entry + its joined answers.\n    sid = s.get(\"submission_id\")\n    bucket[\"submissions\"].append(\n        {\n            \"submission_id\": sid,\n            \"submitted_at\": s.get(\"submittedAt\"),\n            \"correct\": c,\n            \"incorrect\": i,\n            \"time_seconds\": t,\n        }\n    )\n    for a in answers_by_sub.get(sid, []):\n        bucket[\"answers\"].append(a)\n\n# Step 4: finalize each profile -- per-quiz accuracy, counts, drop scratch.\nrecords = []\nfor key in order:\n    prof = profiles[key]\n    del prof[\"quiz_index\"]\n    for q in prof[\"quizzes\"]:\n        answered = q[\"correct\"] + q[\"incorrect\"]\n        q[\"answered\"] = answered\n        q[\"accuracy\"] = (\n            round(q[\"correct\"] / answered, 4) if answered > 0 else None\n        )\n    prof[\"quizzes_num\"] = len(prof[\"quizzes\"])\n    prof[\"context_record_id\"] = (\n        identifier if identifier is not None else prof[\"respondent_id\"]\n    )\n    records.append(prof)\n\nself.output.base_profiles = records\n# On the node's public output, not flow.private: private variables exist\n# only when the @flow decorator declares a private_schema, and an\n# undeclared private write fails inside this (first) node and kills the\n# whole run. Downstream nodes ignore these unless mapped in.\nself.output.profiles_num = len(records)\nself.output.uploaded_num = 0\nself.output.preview_inputs = flow_input\nflow.private.base_profiles = records\n"
       }
     },
-    "for_each_respondent": {
+    "each_respondent": {
       "spec": {
         "kind": "foreach",
-        "name": "for_each_respondent",
-        "display_name": "For each respondent",
+        "name": "each_respondent",
+        "display_name": "Create Profile For Each Respondent",
         "input_schema": {
-          "$ref": "#/schemas/for_each_respondent_input"
+          "$ref": "#/schemas/each_respondent_input"
         },
         "initiators": [
           "__any_user__"
@@ -37,88 +43,95 @@
         },
         "foreach_policy": "PARALLEL"
       },
+      "input_map": {
+        "spec": {
+          "maps": [
+            {
+              "target_variable": "self.input.items",
+              "value_expression": "flow.private.base_profiles",
+              "has_no_value": false,
+              "default_value": null,
+              "metadata": {
+                "assignmentType": "pyExpression"
+              }
+            }
+          ]
+        }
+      },
       "nodes": {
-        "score_respondent": {
+        "stage_profile_inputs": {
           "spec": {
-            "kind": "parallel",
-            "name": "score_respondent",
-            "display_name": "Score respondent",
-            "initiators": [
-              "__any_user__"
-            ],
-            "schedulable": false
-          },
-          "nodes": {
-            "sustained_engagement_level": {
-              "spec": {
-                "kind": "script",
-                "name": "sustained_engagement_level",
-                "display_name": "Sustained engagement level",
-                "description": "Scores a respondent's submission history against a ladder of engagement brackets and emits the highest one whose quiz-count, spacing and timeframe conditions all hold.",
-                "output_schema": {
-                  "$ref": "#/schemas/SustainedEngagementOutput"
-                },
-                "fn": "rows = flow[\"input\"].get(\"rows_raw\") or []\nidentifier = flow[\"input\"].get(\"identifier\")\nlevels = flow[\"input\"].get(\"levels\") or [\n    {\n        \"level\": \"1\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 1,\n    },\n    {\n        \"level\": \"2\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 2,\n    },\n    {\n        \"level\": \"3\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 3,\n    },\n]\n\n# ISO date string -> integer day count, so date gaps become plain\n# subtraction. Only the leading YYYY-MM-DD is read, so full timestamps\n# work too. None when unparseable.\ndef epoch_day(value):\n    if not value:\n        return None\n    try:\n        return datetime.date.fromisoformat(value[:10]).toordinal()\n    except ValueError:\n        return None\n\n# Collapse many submissions to the EARLIEST one per distinct quizId, as\n# {quizId: {\"epoch_day\": int, <extra fields from that earliest row>}}.\ndef earliest_completions(\n    rows, key=\"quizId\", date_field=\"submittedAt\", extra=()\n):\n    out = {}\n    for row in rows:\n        key_val = row.get(key)\n        day = epoch_day(row.get(date_field))\n        if key_val is None or day is None:\n            continue\n        current = out.get(key_val)\n        if current is None or day < current[\"epoch_day\"]:\n            record = {\"epoch_day\": day}\n            for field in extra:\n                record[field] = row.get(field)\n            out[key_val] = record\n    return out\n\n# Greedily keep a maximally-spaced subsequence: walking the sorted days,\n# keep each one at least `min_gap` days after the last kept one.\ndef greedy_spaced(days, min_gap):\n    kept = []\n    for day in sorted(days):\n        if not kept or (day - kept[-1]) >= min_gap:\n            kept.append(day)\n    return kept\n\n# True if any run of `count` consecutive (ascending) days spans <= `span`.\ndef has_run_within(sorted_days, count, span):\n    if count <= 0:\n        return True\n    if len(sorted_days) < count:\n        return False\n    for i in range(len(sorted_days) - count + 1):\n        if (sorted_days[i + count - 1] - sorted_days[i]) <= span:\n            return True\n    return False\n\n# Step 1: one completion per quiz, as a sorted list of day counts.\nearliest = earliest_completions(rows)\nordinals = sorted(rec[\"epoch_day\"] for rec in earliest.values())\n\n# Step 2: rank every passing bracket so a plain sort picks the winner.\n# Key = [need, gap, -window, -idx, level]; ascending sort + take the last\n# => most quizzes, then widest gap, then narrowest window, then the\n# earlier-listed bracket. Each bracket spaces the dates by its own gap.\nranked = []\nfor idx, b in enumerate(levels):\n    need = int(b.get(\"number_of_quizzes\") or 1)\n    gap = int(b.get(\"min_days_between\") or 0)\n    window = int(b.get(\"timeframe_days\") or 0)\n    kept = greedy_spaced(ordinals, gap)\n    if has_run_within(kept, need, window):\n        ranked.append([need, gap, -window, -idx, str(b.get(\"level\"))])\n\n# Step 3: winner is the top-ranked bracket's level (None if none passed).\nlevel = int(sorted(ranked)[-1][4]) if ranked else None\n\n# respondent_id = identifier if given, else the first row's _id, else None.\n# level is JSON null when no bracket qualifies.\nrespondent_id = (\n    identifier\n    if identifier is not None\n    else (rows[0].get(\"_id\") if rows else None)\n)\nresult = {\n    \"respondent_id\": respondent_id,\n    \"sustained_engagement_level\": level,\n}\n\n# Three flavors per field: the raw value, the same value wrapped as a\n# single-key dict, and result / result_json holding every field together.\nself.output.respondent_id = respondent_id\nself.output.sustained_engagement_level = level\n\nself.output.respondent_id_obj = {\"respondent_id\": respondent_id}\nself.output.sustained_engagement_level_obj = {\n    \"sustained_engagement_level\": level\n}\n\nself.output.result = result\nself.output.result_json = json.dumps(result)\n"
-              }
+            "kind": "script",
+            "name": "stage_profile_inputs",
+            "display_name": "Stage prize inputs",
+            "description": "Turns the current prize record into the url list the fetch tool consumes and the baseline prize fields the tag-generation prompt consumes.",
+            "output_schema": {
+              "$ref": "#/schemas/CurrentProfileOutput"
             },
-            "likely_long_term_brand_fan": {
-              "spec": {
-                "kind": "script",
-                "name": "likely_long_term_brand_fan",
-                "display_name": "Likely long-term brand fan",
-                "description": "Emits the likely_long_term_brand_fan metatag when any single brand shows a dense, high-scoring run of distinct quiz completions inside one rolling window.",
-                "output_schema": {
-                  "$ref": "#/schemas/BrandFanOutput"
-                },
-                "fn": "rows = flow[\"input\"].get(\"rows_raw\") or []\nctx = flow[\"input\"].get(\"quiz_context\") or {}\nidentifier = flow[\"input\"].get(\"identifier\")\nwindow_days = int(flow[\"input\"].get(\"window_months\") or 3) * 30\nmin_quizzes = int(flow[\"input\"].get(\"min_quizzes\") or 3)\nsuccess_pct = float(flow[\"input\"].get(\"success_pct\") or 60)\n\n# ISO date string -> integer day count, so date gaps become plain\n# subtraction. Only the leading YYYY-MM-DD is read, so full timestamps\n# work too. None when unparseable.\ndef epoch_day(value):\n    if not value:\n        return None\n    try:\n        return datetime.date.fromisoformat(value[:10]).toordinal()\n    except ValueError:\n        return None\n\n# Collapse many submissions to the EARLIEST one per distinct quizId,\n# carrying the named `extra` fields (here the score) from that same row.\ndef earliest_completions(\n    rows, key=\"quizId\", date_field=\"submittedAt\", extra=()\n):\n    out = {}\n    for row in rows:\n        key_val = row.get(key)\n        day = epoch_day(row.get(date_field))\n        if key_val is None or day is None:\n            continue\n        current = out.get(key_val)\n        if current is None or day < current[\"epoch_day\"]:\n            record = {\"epoch_day\": day}\n            for field in extra:\n                record[field] = row.get(field)\n            out[key_val] = record\n    return out\n\n# Pooled success rate: 100 * sum(correct)/sum(answered). None when nothing\n# was answered, so \"no data\" stays distinct from a real 0%.\ndef pooled_success_rate(\n    items, correct_field=\"correct\", answered_field=\"answered\"\n):\n    correct = sum(int(i.get(correct_field) or 0) for i in items)\n    answered = sum(int(i.get(answered_field) or 0) for i in items)\n    if answered <= 0:\n        return None\n    return 100.0 * correct / answered\n\n# Step 1: one completion per quiz, keeping its date + score.\ncompletions = earliest_completions(\n    rows, extra=[\"correctAnswers\", \"totalAnswered\"]\n)\n\n# Step 2: per-quiz record (day, brand, correct, answered). `answered`\n# falls back to `correct` when totalAnswered is absent.\nquiz = {}\nfor quiz_id, c in completions.items():\n    correct = int(c.get(\"correctAnswers\") or 0)\n    answered_raw = c.get(\"totalAnswered\")\n    answered = (\n        int(answered_raw) if answered_raw is not None else correct\n    )\n    quiz[quiz_id] = {\n        \"ord\": c[\"epoch_day\"],\n        \"brand\": ctx.get(quiz_id, {}).get(\"brand_name\"),\n        \"correct\": correct,\n        \"answered\": answered,\n    }\n\n# Step 3: group the distinct quizzes by brand (skip unknown brands).\nby_brand = {}\nfor q in quiz.values():\n    if q[\"brand\"] is None:\n        continue\n    by_brand.setdefault(q[\"brand\"], []).append(q)\n\n# Step 4: does any brand qualify? Slide a window anchored at each quiz's\n# date; a brand qualifies when a window holds >= min_quizzes AND their\n# pooled success rate beats success_pct. Stop at the first such brand.\nqualifies = False\nfor qs in by_brand.values():\n    ords = [q[\"ord\"] for q in qs]\n    for anchor in ords:\n        win = [\n            q\n            for q in qs\n            if q[\"ord\"] >= anchor and (q[\"ord\"] - anchor) <= window_days\n        ]\n        if len(win) >= min_quizzes:\n            rate = pooled_success_rate(win)\n            if rate is not None and rate > success_pct:\n                qualifies = True\n                break\n    if qualifies:\n        break\n\n# respondent_id = identifier if given, else the first row's _id, else None.\n# metatags is always a list (possibly empty), never null.\nmetatags = [\"likely_long_term_brand_fan\"] if qualifies else []\nrespondent_id = (\n    identifier\n    if identifier is not None\n    else (rows[0].get(\"_id\") if rows else None)\n)\nresult = {\n    \"respondent_id\": respondent_id,\n    \"respondent_behavioral_metatags\": metatags,\n}\n\n# Three flavors per field: the raw value, the same value wrapped as a\n# single-key dict, and result / result_json holding every field together.\nself.output.respondent_id = respondent_id\nself.output.respondent_behavioral_metatags = metatags\n\nself.output.respondent_id_obj = {\"respondent_id\": respondent_id}\nself.output.respondent_behavioral_metatags_obj = {\n    \"respondent_behavioral_metatags\": metatags\n}\n\nself.output.result = result\nself.output.result_json = json.dumps(result)\n"
-              }
+            "fn": "current_profile = dict(parent._current_item) or self[\"input\"] or {}\n\nself.output.profile = current_profile\n"
+          }
+        },
+        "sustained_engagement_level": {
+          "spec": {
+            "kind": "script",
+            "name": "sustained_engagement_level",
+            "display_name": "Sustained engagement level",
+            "description": "Scores a respondent's submission history against a ladder of engagement brackets and emits the highest one whose quiz-count, spacing and timeframe conditions all hold.",
+            "output_schema": {
+              "$ref": "#/schemas/SustainedEngagementOutput"
             },
-            "__start__": {
-              "spec": {
-                "kind": "start",
-                "name": "__start__",
-                "display_name": "__start__"
-              }
+            "fn": "profile = dict(parent._current_item or {}) or (self[\"input\"] or {}).get(\n    \"profile\"\n) or {}\n\n# build_respondent_profiles emits a nested profile (quizzes[].submissions[]);\n# flatten it back to the one-row-per-submission shape this block scores.\nrows = []\nfor q in profile.get(\"quizzes\") or []:\n    qid = q.get(\"quiz_id\")\n    if qid is None:\n        continue\n    for s in q.get(\"submissions\") or []:\n        rows.append(\n            {\n                \"quizId\": qid,\n                \"submittedAt\": s.get(\"submitted_at\"),\n                \"_id\": s.get(\"submission_id\"),\n            }\n        )\n\nidentifier = profile.get(\"respondent_id\")\nlevels = flow[\"input\"].get(\"levels\") or [\n    {\n        \"level\": \"1\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 1,\n    },\n    {\n        \"level\": \"2\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 2,\n    },\n    {\n        \"level\": \"3\",\n        \"timeframe_days\": 30,\n        \"min_days_between\": 7,\n        \"number_of_quizzes\": 3,\n    },\n]\n\n# ISO date string -> integer day count, so date gaps become plain\n# subtraction. Only the leading YYYY-MM-DD is read, so full timestamps\n# work too. None when unparseable.\ndef epoch_day(value):\n    if not value:\n        return None\n    try:\n        return datetime.date.fromisoformat(value[:10]).toordinal()\n    except ValueError:\n        return None\n\n# Collapse many submissions to the EARLIEST one per distinct quizId, as\n# {quizId: {\"epoch_day\": int, <extra fields from that earliest row>}}.\ndef earliest_completions(\n    rows, key=\"quizId\", date_field=\"submittedAt\", extra=()\n):\n    out = {}\n    for row in rows:\n        key_val = row.get(key)\n        day = epoch_day(row.get(date_field))\n        if key_val is None or day is None:\n            continue\n        current = out.get(key_val)\n        if current is None or day < current[\"epoch_day\"]:\n            record = {\"epoch_day\": day}\n            for field in extra:\n                record[field] = row.get(field)\n            out[key_val] = record\n    return out\n\n# Greedily keep a maximally-spaced subsequence: walking the sorted days,\n# keep each one at least `min_gap` days after the last kept one.\ndef greedy_spaced(days, min_gap):\n    kept = []\n    for day in sorted(days):\n        if not kept or (day - kept[-1]) >= min_gap:\n            kept.append(day)\n    return kept\n\n# True if any run of `count` consecutive (ascending) days spans <= `span`.\ndef has_run_within(sorted_days, count, span):\n    if count <= 0:\n        return True\n    if len(sorted_days) < count:\n        return False\n    for i in range(len(sorted_days) - count + 1):\n        if (sorted_days[i + count - 1] - sorted_days[i]) <= span:\n            return True\n    return False\n\n# Step 1: one completion per quiz, as a sorted list of day counts.\nearliest = earliest_completions(rows)\nordinals = sorted(rec[\"epoch_day\"] for rec in earliest.values())\n\n# Step 2: rank every passing bracket so a plain sort picks the winner.\n# Key = [need, gap, -window, -idx, level]; ascending sort + take the last\n# => most quizzes, then widest gap, then narrowest window, then the\n# earlier-listed bracket. Each bracket spaces the dates by its own gap.\nranked = []\nfor idx, b in enumerate(levels):\n    need = int(b.get(\"number_of_quizzes\") or 1)\n    gap = int(b.get(\"min_days_between\") or 0)\n    window = int(b.get(\"timeframe_days\") or 0)\n    kept = greedy_spaced(ordinals, gap)\n    if has_run_within(kept, need, window):\n        ranked.append([need, gap, -window, -idx, str(b.get(\"level\"))])\n\n# Step 3: winner is the top-ranked bracket's level (None if none passed).\nlevel = int(sorted(ranked)[-1][4]) if ranked else None\n\n# respondent_id = identifier if given, else the first row's _id, else None.\n# level is JSON null when no bracket qualifies.\nrespondent_id = (\n    identifier\n    if identifier is not None\n    else (rows[0].get(\"_id\") if rows else None)\n)\nresult = {\n    \"respondent_id\": respondent_id,\n    \"sustained_engagement_level\": level,\n}\n\n# Three flavors per field: the raw value, the same value wrapped as a\n# single-key dict, and result / result_json holding every field together.\nself.output.respondent_id = respondent_id\nself.output.sustained_engagement_level = level\n\nself.output.respondent_id_obj = {\"respondent_id\": respondent_id}\nself.output.sustained_engagement_level_obj = {\n    \"sustained_engagement_level\": level\n}\n\nself.output.result = result\nself.output.result_json = json.dumps(result)\nself.output.preview_inputs = profile\n"
+          }
+        },
+        "likely_long_term_brand_fan": {
+          "spec": {
+            "kind": "script",
+            "name": "likely_long_term_brand_fan",
+            "display_name": "Likely long-term brand fan",
+            "description": "Emits the likely_long_term_brand_fan metatag when any single brand shows a dense, high-scoring run of distinct quiz completions inside one rolling window.",
+            "output_schema": {
+              "$ref": "#/schemas/BrandFanOutput"
             },
-            "__end__": {
-              "spec": {
-                "kind": "end",
-                "name": "__end__",
-                "display_name": "__end__"
-              }
-            }
-          },
-          "edges": [
-            {
-              "start": "__start__",
-              "end": "sustained_engagement_level"
-            },
-            {
-              "start": "sustained_engagement_level",
-              "end": "__end__"
-            },
-            {
-              "start": "__start__",
-              "end": "likely_long_term_brand_fan"
-            },
-            {
-              "start": "likely_long_term_brand_fan",
-              "end": "__end__"
-            }
-          ],
-          "schemas": {},
-          "metadata": {}
+            "fn": "profile = dict(parent._current_item or {}) or (self[\"input\"] or {}).get(\n    \"profile\"\n) or {}\n\n# build_respondent_profiles emits a nested profile (quizzes[].submissions[])\n# carrying brand_name per quiz; flatten it into the submission rows this\n# block scores plus the {quizId: {\"brand_name\": ...}} context it groups by.\nrows = []\nctx = {}\nfor q in profile.get(\"quizzes\") or []:\n    qid = q.get(\"quiz_id\")\n    if qid is None:\n        continue\n    ctx[qid] = {\"brand_name\": q.get(\"brand_name\")}\n    for s in q.get(\"submissions\") or []:\n        correct = int(s.get(\"correct\") or 0)\n        incorrect = int(s.get(\"incorrect\") or 0)\n        rows.append(\n            {\n                \"quizId\": qid,\n                \"submittedAt\": s.get(\"submitted_at\"),\n                \"correctAnswers\": correct,\n                # No explicit answered count on a submission; correct +\n                # incorrect matches how the base profile derives accuracy.\n                \"totalAnswered\": correct + incorrect,\n                \"_id\": s.get(\"submission_id\"),\n            }\n        )\n\nidentifier = profile.get(\"respondent_id\")\nwindow_days = int(flow[\"input\"].get(\"window_months\") or 3) * 30\nmin_quizzes = int(flow[\"input\"].get(\"min_quizzes\") or 3)\nsuccess_pct = float(flow[\"input\"].get(\"success_pct\") or 60)\n\n# ISO date string -> integer day count, so date gaps become plain\n# subtraction. Only the leading YYYY-MM-DD is read, so full timestamps\n# work too. None when unparseable.\ndef epoch_day(value):\n    if not value:\n        return None\n    try:\n        return datetime.date.fromisoformat(value[:10]).toordinal()\n    except ValueError:\n        return None\n\n# Collapse many submissions to the EARLIEST one per distinct quizId,\n# carrying the named `extra` fields (here the score) from that same row.\ndef earliest_completions(\n    rows, key=\"quizId\", date_field=\"submittedAt\", extra=()\n):\n    out = {}\n    for row in rows:\n        key_val = row.get(key)\n        day = epoch_day(row.get(date_field))\n        if key_val is None or day is None:\n            continue\n        current = out.get(key_val)\n        if current is None or day < current[\"epoch_day\"]:\n            record = {\"epoch_day\": day}\n            for field in extra:\n                record[field] = row.get(field)\n            out[key_val] = record\n    return out\n\n# Pooled success rate: 100 * sum(correct)/sum(answered). None when nothing\n# was answered, so \"no data\" stays distinct from a real 0%.\ndef pooled_success_rate(\n    items, correct_field=\"correct\", answered_field=\"answered\"\n):\n    correct = sum(int(i.get(correct_field) or 0) for i in items)\n    answered = sum(int(i.get(answered_field) or 0) for i in items)\n    if answered <= 0:\n        return None\n    return 100.0 * correct / answered\n\n# Step 1: one completion per quiz, keeping its date + score.\ncompletions = earliest_completions(\n    rows, extra=[\"correctAnswers\", \"totalAnswered\"]\n)\n\n# Step 2: per-quiz record (day, brand, correct, answered). `answered`\n# falls back to `correct` when totalAnswered is absent.\nquiz = {}\nfor quiz_id, c in completions.items():\n    correct = int(c.get(\"correctAnswers\") or 0)\n    answered_raw = c.get(\"totalAnswered\")\n    answered = (\n        int(answered_raw) if answered_raw is not None else correct\n    )\n    quiz[quiz_id] = {\n        \"ord\": c[\"epoch_day\"],\n        \"brand\": ctx.get(quiz_id, {}).get(\"brand_name\"),\n        \"correct\": correct,\n        \"answered\": answered,\n    }\n\n# Step 3: group the distinct quizzes by brand (skip unknown brands).\nby_brand = {}\nfor q in quiz.values():\n    if q[\"brand\"] is None:\n        continue\n    by_brand.setdefault(q[\"brand\"], []).append(q)\n\n# Step 4: does any brand qualify? Slide a window anchored at each quiz's\n# date; a brand qualifies when a window holds >= min_quizzes AND their\n# pooled success rate beats success_pct. Stop at the first such brand.\nqualifies = False\nfor qs in by_brand.values():\n    ords = [q[\"ord\"] for q in qs]\n    for anchor in ords:\n        win = [\n            q\n            for q in qs\n            if q[\"ord\"] >= anchor and (q[\"ord\"] - anchor) <= window_days\n        ]\n        if len(win) >= min_quizzes:\n            rate = pooled_success_rate(win)\n            if rate is not None and rate > success_pct:\n                qualifies = True\n                break\n    if qualifies:\n        break\n\n# respondent_id = identifier if given, else the first row's _id, else None.\n# metatags is always a list (possibly empty), never null.\nmetatags = [\"likely_long_term_brand_fan\"] if qualifies else []\nrespondent_id = (\n    identifier\n    if identifier is not None\n    else (rows[0].get(\"_id\") if rows else None)\n)\nresult = {\n    \"respondent_id\": respondent_id,\n    \"respondent_behavioral_metatags\": metatags,\n}\n\n# Three flavors per field: the raw value, the same value wrapped as a\n# single-key dict, and result / result_json holding every field together.\nself.output.respondent_id = respondent_id\nself.output.respondent_behavioral_metatags = metatags\n\nself.output.respondent_id_obj = {\"respondent_id\": respondent_id}\nself.output.respondent_behavioral_metatags_obj = {\n    \"respondent_behavioral_metatags\": metatags\n}\n\nself.output.result = result\nself.output.result_json = json.dumps(result)\nself.output.preview_inputs = profile\n"
+          }
         },
         "merge_profile_signals": {
           "spec": {
             "kind": "script",
             "name": "merge_profile_signals",
             "display_name": "Merge profile signals",
-            "description": "Copies the current respondent profile and layers on every signal handed to this node by the upstream scoring branches, whatever they happen to be.",
-            "output_schema": {
-              "$ref": "#/schemas/merge_profile_signals_output"
+            "description": "Copies the current respondent profile and attaches an `analysis` block holding one entry per upstream scorer, keyed by the scorer's name and carrying that scorer's result.",
+            "input_schema": {
+              "$ref": "#/schemas/merge_profile_signals_input"
             },
-            "fn": "profile = dict(parent._current_item or {})\n\n# Keys that identify the record rather than describe it -- never let a\n# scorer's echoed id overwrite the profile's own fields.\nskip = (\"respondent_id\", \"context_record_id\", \"identifier\")\n\n# Flatten one scorer's contribution onto the profile. Each block emits its\n# raw fields plus _obj / result / result_json wrappers of the same values,\n# so prefer `result` when present and ignore the redundant rest.\ndef absorb(value):\n    if not isinstance(value, dict):\n        return\n    fields = (\n        value.get(\"result\")\n        if isinstance(value.get(\"result\"), dict)\n        else value\n    )\n    for key, val in fields.items():\n        if key in skip or key.endswith(\"_obj\") or key == \"result_json\":\n            continue\n        if key == \"result\":\n            continue\n        # Lists accumulate across scorers (metatags from several sources);\n        # scalars are set outright.\n        if isinstance(val, list):\n            existing = profile.get(key)\n            merged = (\n                list(existing) if isinstance(existing, list) else []\n            )\n            for item in val:\n                if item not in merged:\n                    merged.append(item)\n            profile[key] = merged\n        elif val is not None or key not in profile:\n            profile[key] = val\n\n# self.input holds one entry per mapped-in branch, keyed by whatever the\n# data map called it. Walk them all rather than naming any.\ninputs = self[\"input\"] or {}\nfor key, value in inputs.items():\n    if key == \"profile\":\n        continue\n    absorb(value)\n\nself.output.profile = profile\n"
+            "output_schema": {
+              "$ref": "#/schemas/MergeProfileOutput"
+            },
+            "fn": "enriched_profile = dict(parent._current_item or {})\n# sus = flow.sustained_engagement_level.output\n# fan = flow.likely_long_term_brand_fan.output\nsus_p = parent.sustained_engagement_level.output.result\nfan_p = parent.likely_long_term_brand_fan.output.result\ninp = {\"sus_p\": sus_p, \"fan_p\": fan_p}\n\n# One entry per mapped-in scorer, keyed by the input field name -- which\n# is the scorer node's own name, so the key needs no translation.\ninputs = dict(self.input or {})\n\nanalysis = {}\nfor scorer_name, result in inputs.items():\n    if result is None:\n        continue\n    # Each scorer is mapped in as its `result` dict. If a whole node\n    # output ever arrives instead, unwrap the `result` it carries so the\n    # analysis entry stays the result either way.\n    if isinstance(result, dict) and isinstance(\n        result.get(\"result\"), dict\n    ):\n        result = result[\"result\"]\n    analysis[scorer_name] = result\n\nenriched_profile[\"analysis\"] = analysis\n\nself.output.enriched_profile = enriched_profile\n# The raw signal bag: {} here means the scorer maps did not land, so a\n# run tells you whether to look at the wiring or at the scoring logic.\nself.output.preview_inputs = inputs\nself.output.parentz = inp\n"
+          },
+          "input_map": {
+            "spec": {
+              "maps": [
+                {
+                  "target_variable": "self.input.sustained_engagement_level",
+                  "value_expression": "parent.sustained_engagement_level.output.result",
+                  "has_no_value": false,
+                  "default_value": null,
+                  "metadata": {
+                    "assignmentType": "pyExpression"
+                  }
+                },
+                {
+                  "target_variable": "self.input.likely_long_term_brand_fan",
+                  "value_expression": "parent.likely_long_term_brand_fan.output.result",
+                  "has_no_value": false,
+                  "default_value": null,
+                  "metadata": {
+                    "assignmentType": "pyExpression"
+                  }
+                }
+              ]
+            }
           }
         },
         "__start__": {
@@ -139,10 +152,18 @@
       "edges": [
         {
           "start": "__start__",
-          "end": "score_respondent"
+          "end": "stage_profile_inputs"
         },
         {
-          "start": "score_respondent",
+          "start": "stage_profile_inputs",
+          "end": "sustained_engagement_level"
+        },
+        {
+          "start": "sustained_engagement_level",
+          "end": "likely_long_term_brand_fan"
+        },
+        {
+          "start": "likely_long_term_brand_fan",
           "end": "merge_profile_signals"
         },
         {
@@ -175,48 +196,118 @@
     },
     {
       "start": "build_respondent_profiles",
-      "end": "for_each_respondent"
+      "end": "each_respondent"
     },
     {
-      "start": "for_each_respondent",
+      "start": "each_respondent",
       "end": "__end__"
     }
   ],
   "schemas": {
-    "build_respondent_profiles_output": {
+    "PrizeFlowPrivate": {
       "type": "object",
-      "title": "build_respondent_profiles_output",
+      "title": "PrizeFlowPrivate",
+      "description": "Internal accumulator for the for_each loop.\n\nThe foreach node exposes no readable aggregate of its iterations: its\n`output_schema` is deprecated and populates nothing, and mapping the loop's\noutput (whole or by leaf) into a downstream node yields empty. So each\niteration appends its own record to this flow-scoped list instead, and\nbuild_prize_table reads the finished list after the loop.\n\nflow.private.* is flow-scoped rather than node-scoped, which is what lets a\nnode inside the subflow write somewhere a node outside it can read.",
+      "required": [
+        "base_profiles",
+        "enriched_profiles"
+      ],
       "properties": {
-        "profiles": {
-          "type": "string",
-          "description": "Output variable: profiles"
+        "base_profiles": {
+          "title": "Base Profiles",
+          "description": "One record per completed iteration."
+        },
+        "enriched_profiles": {
+          "title": "Enriched Profiles",
+          "description": "One record per completed enriched iteration."
+        }
+      },
+      "additionalProperties": true
+    },
+    "bo_1": {
+      "type": "object",
+      "title": "bo_1",
+      "additionalProperties": true
+    },
+    "Preview Inputs": {
+      "type": "object",
+      "title": "Preview Inputs",
+      "description": "Preview inputs from the flow for debugging purposes",
+      "additionalProperties": true
+    },
+    "BuildProfilesOutput": {
+      "type": "object",
+      "title": "BuildProfilesOutput",
+      "description": "build_respondent_profiles' output.\n\nWithout this, Flow.script() auto-generates an output_schema from the\nscript's `self.output.X = ...` assignments and -- since it can't infer a\nreal type from a plain assignment -- always defaults every field to\n`string`. That mistypes `profiles` as a string instead of an array, and\nthe foreach's `items` (mapped from this field) receives it accordingly.",
+      "required": [],
+      "properties": {
+        "base_profiles": {
+          "type": "array",
+          "title": "Base Profiles",
+          "description": "One profile per respondent, nesting quizzes/submissions/answers.",
+          "items": {
+            "title": "Base Profiles",
+            "$ref": "#/schemas/bo_1"
+          }
+        },
+        "profiles_num": {
+          "type": "integer",
+          "title": "Profiles Num",
+          "description": "How many profiles were built this run.",
+          "default": 0
+        },
+        "uploaded_num": {
+          "type": "integer",
+          "title": "Uploaded Num",
+          "description": "Upload counter, zeroed for this run.",
+          "default": 0
+        },
+        "preview_inputs": {
+          "title": "Preview Inputs",
+          "$ref": "#/schemas/Preview Inputs"
         }
       }
     },
     "RespondentProfileItem": {
       "type": "object",
       "title": "RespondentProfileItem",
-      "description": "One respondent profile as iterated by the foreach.\n\nLoose by design: `extra=\"allow\"` lets the full nested profile that\nbuild_respondent_profiles emits (identity, quizzes, submissions, answers)\nride through without every level having to be declared here.",
+      "description": "One respondent profile as iterated by the foreach.\n\nEVERY field the downstream nodes read must be declared here. `extra=\"allow\"`\nis not enough: the engine validates each item against this schema and drops\nwhatever it does not declare, so an undeclared field arrives empty at\n`parent._current_item` even though build_respondent_profiles emitted it.\n\nBoth scorers walk `quizzes[].submissions[]`, so `quizzes` has to be declared\n-- without it every respondent scores off an empty list. The nested levels\nstay untyped (`List[dict]`) so the whole quiz/submission/answer structure\nrides through without being spelled out.",
       "required": [],
       "properties": {
         "respondent_id": {
+          "type": "string",
           "title": "Respondent Id",
           "description": "Id of the respondent.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "default": ""
+        },
+        "context_record_id": {
+          "type": "string",
+          "title": "Context Record Id",
+          "description": "Identifier supplied by the flow input, else the respondent id.",
+          "default": ""
+        },
+        "identity": {
+          "title": "Identity",
+          "description": "Display name, email and the anonymous / owner flags."
+        },
+        "quizzes": {
+          "type": "array",
+          "title": "Quizzes",
+          "description": "One entry per distinct quiz, each nesting its submissions and answers.",
+          "items": {}
+        },
+        "quizzes_num": {
+          "type": "integer",
+          "title": "Quizzes Num",
+          "description": "How many distinct quizzes the respondent completed.",
+          "default": 0
         }
       },
       "additionalProperties": true
     },
-    "for_each_respondent_input": {
+    "each_respondent_input": {
       "type": "object",
-      "title": "for_each_respondent_input",
+      "title": "each_respondent_input",
       "required": [
         "items"
       ],
@@ -229,6 +320,44 @@
         }
       }
     },
+    "CurrentProfileOutput": {
+      "type": "object",
+      "title": "CurrentProfileOutput",
+      "description": "Output for the stage_profile_inputs node.",
+      "required": [
+        "profile"
+      ],
+      "properties": {
+        "profile": {
+          "title": "Profile",
+          "description": "Current profile in the flow"
+        }
+      }
+    },
+    "Respondent Id Obj": {
+      "type": "object",
+      "title": "Respondent Id Obj",
+      "description": "{\"respondent_id\": ...}",
+      "additionalProperties": true
+    },
+    "Sustained Engagement Level Obj": {
+      "type": "object",
+      "title": "Sustained Engagement Level Obj",
+      "description": "{\"sustained_engagement_level\": ...}",
+      "additionalProperties": true
+    },
+    "Result": {
+      "type": "object",
+      "title": "Result",
+      "description": "Both fields together, as a dict.",
+      "additionalProperties": true
+    },
+    "Preview Inputs_1": {
+      "type": "object",
+      "title": "Preview Inputs_1",
+      "description": "Preview of the input for debugging purposes.",
+      "additionalProperties": true
+    },
     "SustainedEngagementOutput": {
       "type": "object",
       "title": "SustainedEngagementOutput",
@@ -236,81 +365,52 @@
       "required": [],
       "properties": {
         "respondent_id": {
+          "type": "string",
           "title": "Respondent Id",
           "description": "Id of the respondent.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "default": ""
         },
         "sustained_engagement_level": {
+          "type": "integer",
           "title": "Sustained Engagement Level",
-          "description": "Highest engagement bracket that qualified; empty when none did.",
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Highest engagement bracket that qualified; 0 when none did.",
+          "default": 0
         },
         "respondent_id_obj": {
           "title": "Respondent Id Obj",
-          "description": "{\"respondent_id\": ...}",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Respondent Id Obj"
         },
         "sustained_engagement_level_obj": {
           "title": "Sustained Engagement Level Obj",
-          "description": "{\"sustained_engagement_level\": ...}",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Sustained Engagement Level Obj"
         },
         "result": {
           "title": "Result",
-          "description": "Both fields together, as a dict.",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Result"
         },
         "result_json": {
+          "type": "string",
           "title": "Result Json",
           "description": "Both fields together, as a JSON string.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "default": ""
+        },
+        "preview_inputs": {
+          "title": "Preview Inputs",
+          "$ref": "#/schemas/Preview Inputs_1"
         }
       }
+    },
+    "Respondent Behavioral Metatags Obj": {
+      "type": "object",
+      "title": "Respondent Behavioral Metatags Obj",
+      "description": "{\"respondent_behavioral_metatags\": [...]}",
+      "additionalProperties": true
+    },
+    "Preview Inputs_2": {
+      "type": "object",
+      "title": "Preview Inputs_2",
+      "description": "Preview of the input for debugging purposes.",
+      "additionalProperties": true
     },
     "BrandFanOutput": {
       "type": "object",
@@ -319,16 +419,10 @@
       "required": [],
       "properties": {
         "respondent_id": {
+          "type": "string",
           "title": "Respondent Id",
           "description": "Id of the respondent.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "default": ""
         },
         "respondent_behavioral_metatags": {
           "type": "array",
@@ -340,70 +434,95 @@
         },
         "respondent_id_obj": {
           "title": "Respondent Id Obj",
-          "description": "{\"respondent_id\": ...}",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Respondent Id Obj"
         },
         "respondent_behavioral_metatags_obj": {
           "title": "Respondent Behavioral Metatags Obj",
-          "description": "{\"respondent_behavioral_metatags\": [...]}",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Respondent Behavioral Metatags Obj"
         },
         "result": {
           "title": "Result",
-          "description": "Both fields together, as a dict.",
-          "anyOf": [
-            {
-              "type": "object",
-              "additionalProperties": true
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/schemas/Result"
         },
         "result_json": {
+          "type": "string",
           "title": "Result Json",
           "description": "Both fields together, as a JSON string.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "default": ""
+        },
+        "preview_inputs": {
+          "title": "Preview Inputs",
+          "$ref": "#/schemas/Preview Inputs_2"
         }
       }
     },
-    "merge_profile_signals_output": {
+    "merge_profile_signals_input": {
       "type": "object",
-      "title": "merge_profile_signals_output",
+      "title": "merge_profile_signals_input",
+      "required": [],
       "properties": {
-        "profile": {
-          "type": "string",
-          "description": "Output variable: profile"
+        "sustained_engagement_level": {
+          "title": "Sustained Engagement Level",
+          "description": "The `result` dict emitted by the sustained_engagement_level script node: respondent_id plus the sustained_engagement_level bracket that qualified."
+        },
+        "likely_long_term_brand_fan": {
+          "title": "Likely Long Term Brand Fan",
+          "description": "The `result` dict emitted by the likely_long_term_brand_fan script node: respondent_id plus the respondent_behavioral_metatags list."
         }
       }
+    },
+    "MergeProfileOutput": {
+      "type": "object",
+      "title": "MergeProfileOutput",
+      "description": "merge_profile_signals' output -- same auto-typing problem as\nBuildProfilesOutput, and this one is the flow's final result, so a\nstringified `profile` here means every run returns unusable output.",
+      "required": [
+        "enriched_profile",
+        "preview_inputs",
+        "parentz"
+      ],
+      "properties": {
+        "enriched_profile": {
+          "title": "Enriched Profile",
+          "description": "The respondent profile plus every signal the scorers contributed."
+        },
+        "preview_inputs": {
+          "title": "Preview Inputs",
+          "description": "Preview inputs from the flow for debugging purposes"
+        },
+        "parentz": {
+          "title": "Parentz",
+          "description": "Parentz preview"
+        }
+      },
+      "additionalProperties": true
     }
   },
   "metadata": {
     "source_kind": "adk/python",
-    "compiled_on": "2026-07-28T13:44:03.181230+00:00"
+    "compiled_on": "2026-08-08T17:06:36.929635+00:00"
+  },
+  "output_map": {
+    "spec": {
+      "maps": [
+        {
+          "target_variable": "flow.output.base_profiles",
+          "value_expression": "flow.each_respondent.output.base_profiles",
+          "has_no_value": false,
+          "default_value": null,
+          "metadata": {
+            "assignmentType": "pyExpression"
+          }
+        },
+        {
+          "target_variable": "flow.output.enriched_profiles",
+          "value_expression": "flow.each_respondent.output.enriched_profiles",
+          "has_no_value": false,
+          "default_value": null,
+          "metadata": {
+            "assignmentType": "pyExpression"
+          }
+        }
+      ]
+    }
   }
 }

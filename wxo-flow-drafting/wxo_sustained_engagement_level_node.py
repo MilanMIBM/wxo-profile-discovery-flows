@@ -15,8 +15,8 @@ with app.setup:
     import os
 
     from pathlib import Path
-    from typing import Optional
     from pydantic import BaseModel, Field
+    from typing import List, Dict
     from pymongo import MongoClient
     from dotenv import load_dotenv
 
@@ -25,6 +25,34 @@ with app.setup:
         sys.path.insert(0, parent_dir)
 
     from src.helpers.logic_block import logic_block
+
+    class SustainedEngagementOutput(BaseModel):
+        """Outputs of the sustained_engagement_level script node — all optional."""
+
+        respondent_id: str = Field(
+            default="", description="Id of the respondent."
+        )
+        sustained_engagement_level: int = Field(
+            default=0,
+            description="Highest engagement bracket that qualified; 0 when none did.",
+        )
+        respondent_id_obj: dict = Field(
+            default_factory=dict, description='{"respondent_id": ...}'
+        )
+        sustained_engagement_level_obj: dict = Field(
+            default_factory=dict,
+            description='{"sustained_engagement_level": ...}',
+        )
+        result: dict = Field(
+            default_factory=dict, description="Both fields together, as a dict."
+        )
+        result_json: str = Field(
+            default="", description="Both fields together, as a JSON string."
+        )
+        preview_inputs: dict = Field(
+            default_factory=dict,
+            description="Preview of the input for debugging purposes.",
+        )
 
 
 @app.cell
@@ -124,11 +152,24 @@ def _(postgresql_engine, rewrite_tables):
     return
 
 
+@app.cell
+def _():
+    retrieve_number = mo.ui.number(
+        label="**Control number of records to retrieve:**",
+        start=0,
+        stop=1000,
+        step=1,
+        value=50,
+    )
+    retrieve_number
+    return (retrieve_number,)
+
+
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, retrieve_number):
     quiz_meta = mo.sql(
         f"""
-        SELECT * FROM "quiz_meta" LIMIT 1000
+        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
         """,
         output=False,
         engine=postgresql_engine,
@@ -137,10 +178,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
-        SELECT * FROM "quiz_structure" LIMIT 1000
+        SELECT * FROM "quiz_structure"
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -149,10 +192,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
-        SELECT * FROM "quiz_details" LIMIT 1000
+        SELECT * FROM "quiz_details" 
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -161,10 +206,12 @@ def _(postgresql_engine):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine):
+def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
-        SELECT * FROM "quiz_scoring" LIMIT 1000
+        SELECT * FROM "quiz_scoring"
+        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        LIMIT 1000
         """,
         output=False,
         engine=postgresql_engine,
@@ -314,39 +361,6 @@ def _():
 @app.cell(column=1, hide_code=True)
 def _():
     mo.md(r"""
-    ### Class definitions
-    """)
-    return
-
-
-@app.class_definition
-class SustainedEngagementOutput(BaseModel):
-    """Outputs of the sustained_engagement_level script node — all optional."""
-
-    respondent_id: Optional[str] = Field(
-        default=None, description="Id of the respondent."
-    )
-    sustained_engagement_level: Optional[int] = Field(
-        default=None,
-        description="Highest engagement bracket that qualified; empty when none did.",
-    )
-    respondent_id_obj: Optional[dict] = Field(
-        default=None, description='{"respondent_id": ...}'
-    )
-    sustained_engagement_level_obj: Optional[dict] = Field(
-        default=None, description='{"sustained_engagement_level": ...}'
-    )
-    result: Optional[dict] = Field(
-        default=None, description="Both fields together, as a dict."
-    )
-    result_json: Optional[str] = Field(
-        default=None, description="Both fields together, as a JSON string."
-    )
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
     ## Logic blocks
     """)
     return
@@ -357,7 +371,9 @@ def _():
     # Authored and locally tested in wxo_base_profile_node.py; imported here
     # so there is exactly one definition of it. Needed only to produce the
     # profiles this notebook's local test scores.
-    from wxo_base_profile_node import build_respondent_profiles
+    from wxo_base_profile_node import (
+        build_respondent_profiles,
+    )
 
     return (build_respondent_profiles,)
 
@@ -393,7 +409,12 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
     # This node runs INSIDE the foreach, so its data comes from the current
     # iteration's profile, not from flow.input -- flow.input is identical on
     # every iteration and would score all respondents the same.
-    profile = dict(parent._current_item or {})
+    # Cursor first: a data map targeting `self.input.input` never lands (the
+    # field name collides with the input container itself), so self["input"]
+    # arrived {}. The mapped fallback keeps working if a named field is wired.
+    profile = dict(parent._current_item or {}) or (self["input"] or {}).get(
+        "profile"
+    ) or {}
 
     # build_respondent_profiles emits a nested profile (quizzes[].submissions[]);
     # flatten it back to the one-row-per-submission shape this block scores.
@@ -527,6 +548,7 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
 
     self.output.result = result
     self.output.result_json = json.dumps(result)
+    self.output.preview_inputs = profile
 
 
 @app.cell(column=2, hide_code=True)
