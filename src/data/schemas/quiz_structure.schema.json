@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_structure.schema.json",
   "title": "quiz_structure",
-  "description": "One row per question in a quiz: the question bank / answer key. Source table data/tables/quiz_structure.csv. Composite key (quizId, question_number). Joins to details.csv on (quizId, question_number) to grade answers.",
+  "description": "One row per question in a quiz: the question bank / answer key. Source table data/tables/quiz_structure.csv. Composite key (quiz_id, question_number). Joins to details.csv on (quiz_id, question_number) to grade answers.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "quizId",
+    "quiz_id",
     "title",
     "brand_name",
     "language",
@@ -17,8 +17,8 @@
     "options"
   ],
   "properties": {
-    "quizId": {
-      "description": "Quiz this question belongs to. Foreign key to quiz_meta.quizId.",
+    "quiz_id": {
+      "description": "Quiz this question belongs to. Foreign key to quiz_meta.quiz_id.",
       "type": "string",
       "format": "uuid"
     },
@@ -35,7 +35,13 @@
     "language": {
       "description": "ISO 639-2/B three-letter language code of the quiz.",
       "type": "string",
-      "enum": ["eng", "est", "lav", "lit", "pol"]
+      "enum": [
+        "eng",
+        "est",
+        "lav",
+        "lit",
+        "pol"
+      ]
     },
     "question_number": {
       "description": "1-based position of this question within the quiz.",

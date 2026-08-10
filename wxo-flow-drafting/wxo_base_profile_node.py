@@ -16,7 +16,7 @@ with app.setup:
 
     from pathlib import Path
     from pydantic import BaseModel, Field
-    from typing import List, Dict
+    from typing import List, Dict, Any
     from pymongo import MongoClient
     from dotenv import load_dotenv
 
@@ -40,17 +40,13 @@ with app.setup:
             default_factory=list,
             description="One profile per respondent, nesting quizzes/submissions/answers.",
         )
-        # Run counters live on the node's public output rather than flow.private:
-        # flow.private.* requires a private_schema on the @flow decorator, and an
-        # undeclared private write fails inside the first node and kills the run.
-        # Downstream nodes simply ignore them unless mapped in.
         profiles_num: int = Field(
             default=0, description="How many profiles were built this run."
         )
         uploaded_num: int = Field(
             default=0, description="Upload counter, zeroed for this run."
         )
-        preview_inputs: dict = Field(
+        preview_inputs: Any = Field(
             default=dict,
             description="Preview inputs from the flow for debugging purposes",
         )
@@ -104,7 +100,7 @@ def _():
     return (rewrite_tables,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(postgresql_engine, rewrite_tables):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
@@ -156,25 +152,45 @@ def _(postgresql_engine, rewrite_tables):
 @app.cell
 def _():
     retrieve_number = mo.ui.number(
-        label="**Control number of records to retrieve:**",
+        label="**Control number of records to retrieve :**",
         start=0,
         stop=1000,
         step=1,
-        value=50,
+        value=3,
     )
-    retrieve_number
+    # retrieve_number
     return (retrieve_number,)
 
 
-@app.cell(hide_code=True)
-def _(postgresql_engine, retrieve_number):
-    quiz_meta = mo.sql(
-        f"""
-        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
-        """,
-        output=False,
-        engine=postgresql_engine,
+@app.cell
+def _(retrieve_number, select_account):
+    filter_stack = mo.hstack(
+        [select_account, retrieve_number], justify="space-around"
     )
+    return (filter_stack,)
+
+
+@app.cell(hide_code=True)
+def _(postgresql_engine, retrieve_number, select_account):
+    if select_account.value:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            WHERE "account_id" = '{select_account.value}'
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
+    else:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
     return (quiz_meta,)
 
 
@@ -183,7 +199,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
         SELECT * FROM "quiz_structure"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -197,7 +213,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
         SELECT * FROM "quiz_details" 
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -211,7 +227,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
         SELECT * FROM "quiz_scoring"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -232,12 +248,24 @@ def _():
 def _(postgresql_engine):
     quiz_ids_unique = mo.sql(
         f"""
-        SELECT DISTINCT "quizId" FROM "quiz_structure"
+        SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
         engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
+
+
+@app.cell(hide_code=True)
+def _(postgresql_engine):
+    account_ids_unique = mo.sql(
+        f"""
+        SELECT DISTINCT "account_id" FROM "quiz_meta"
+        """,
+        output=False,
+        engine=postgresql_engine,
+    )
+    return (account_ids_unique,)
 
 
 @app.cell(hide_code=True)
@@ -253,10 +281,22 @@ def _(postgresql_engine):
 
 
 @app.cell
+def _(account_ids_unique):
+    account_id_list = account_ids_unique.account_id.to_list()
+    select_account = mo.ui.dropdown(
+        label="**Select account to filter by :**",
+        options=account_id_list,
+        # value=account_id_list[0],
+    )
+    # select_account
+    return (select_account,)
+
+
+@app.cell
 def _(user_emails):
     user_emails_list = user_emails.email.to_list()
     select_user = mo.ui.dropdown(
-        label="**Select user email:**",
+        label="**Select user email :**",
         options=user_emails_list,
         value=user_emails_list[0],
     )
@@ -266,15 +306,17 @@ def _(user_emails):
 
 @app.cell
 def _(quiz_ids_unique):
-    quiz_id_list = quiz_ids_unique.quizId.to_list()
+    quiz_id_list = quiz_ids_unique.quiz_id.to_list()
     select_quiz_id = mo.ui.dropdown(
-        label="**Select Quiz ID:**", options=quiz_id_list, value=quiz_id_list[0]
+        label="**Select Quiz ID :**",
+        options=quiz_id_list,
+        value=quiz_id_list[0],
     )
     # select_quiz_id
     return
 
 
-@app.function
+@app.function(hide_code=True)
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
@@ -289,7 +331,7 @@ def as_table_entry(name, df):
     }
 
 
-@app.function
+@app.function(hide_code=True)
 def jsonable_row(row):
     """Convert a dataframe row mapping to a plain JSON-serialisable dict.
 
@@ -349,10 +391,7 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
-    # Same input shape as the respondent-profile flow: the retrieve_tables
-    # node's table bundle.
-    test_flow = {"retrieve_tables": {"output": db_records}}
-    # test_flow = {"output": db_records}
+    test_flow = {"retrieved_tables": db_records}
     return (test_flow,)
 
 
@@ -371,42 +410,33 @@ def _():
 
 
 @app.function
-# 🧩 Build one base respondent profile per respondent.
-#
-# Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-# `self` and `parent` are injected, `json` is pre-bound (no imports), and there
-# is no return value -- output happens by assignment. The parameters exist so
-# linters resolve those names; the engine never calls this function.
-#
-# Reads:  the table bundle (scoring + details + quiz_meta) from the flow's own
-#         input -- either nested under "retrieve_tables"
-#         ({"retrieve_tables": {"output": [...]}}) or as the input itself
-#         ({"output": [...]}). This is the first node in the flow, so there is
-#         no upstream node to read from.
-# Writes: self.output.profiles      -- list of base profiles, one per respondent
-#         self.output.profiles_num  -- how many were built
-#         self.output.uploaded_num  -- upload counter, zeroed for this run
-
 @logic_block(
     display_name="Build respondent profiles",
     output_schema=BuildProfilesOutput,
 )
 def build_respondent_profiles(flow, self, parent, json):
-    """Collapses the flat quiz tables passed in as flow input into one base profile per respondent, nesting each respondent's quizzes, submissions and answers."""
-    # Accept the bundle nested under "retrieve_tables" (the caller passing a
-    # retrieval node's context through verbatim) or as the input itself.
-    flow_input = flow["input"] or {}
-    node_out = flow_input.get("retrieve_tables") or flow_input
-    if not isinstance(node_out, dict):
-        node_out = {}
-    tables = node_out.get("output")
+    """Builds one profile per quiz respondent from the raw table bundle, nesting each respondent's quizzes, submissions and answers.
 
-    # The tool returns a bare array; tolerate a wrapped {key: [...]} shape too.
+    Runs in the flow engine's restricted sandbox, NOT as a normal module:
+    `flow`, `self` and `parent` are injected, `json` is pre-bound (no imports),
+    and there is no return value -- output happens by assignment. The
+    parameters exist so linters resolve those names; the engine never calls
+    this function.
+
+    Reads:  the table bundle (scoring + details + quiz_meta) from the flow's own
+            input -- bare, or nested under "retrieved_tables" / an "output"
+            wrapper. This is the first node in the flow, so there is no
+            upstream node to read from.
+    Writes: self.output.profiles      -- list of base profiles, one per respondent
+            self.output.profiles_num  -- how many were built
+            self.output.uploaded_num  -- upload counter, zeroed for this run"""
+
+    # Normally a bare list of {"table": ..., "rows": [...]} entries, but a
+    # caller passing a retrieval node's context through verbatim wraps it.
+    flow_input = flow["input"] or {}
+    tables = flow_input.get("retrieved_tables")
     if isinstance(tables, dict):
-        for key in ("result", "output", "value", "tables"):
-            if isinstance(tables.get(key), list):
-                tables = tables[key]
-                break
+        tables = tables.get("output")
     if not isinstance(tables, list):
         tables = []
 
@@ -419,7 +449,6 @@ def build_respondent_profiles(flow, self, parent, json):
         except (TypeError, ValueError):  # fmt: skip
             return 0
 
-    # Truthy across real bools and common string spellings ("true"/"1"/"yes"/"t"):
     # DB rows arrive typed, CSV-style rows arrive as strings.
     def as_bool(value):
         if isinstance(value, bool):
@@ -428,8 +457,8 @@ def build_respondent_profiles(flow, self, parent, json):
             return value.strip().lower() in ("true", "1", "yes", "t")
         return bool(value)
 
-    # brand_tags / prize_type are stored as JSON-array strings ('["a","b"]') but
-    # may also arrive as a real list, empty, or "[]". Normalise to a list or None.
+    # Tags are stored as JSON-array strings ('["a","b"]') but may also arrive
+    # as a real list, empty, or "[]". Normalise to a list or None.
     def parse_tags(value):
         if value is None:
             return None
@@ -451,11 +480,11 @@ def build_respondent_profiles(flow, self, parent, json):
     details = by_table.get("details") or []
     quiz_meta = by_table.get("quiz_meta") or []
 
-    # Step 1: quiz_context keyed by quizId -- nest the flat prize.* columns into
-    # a `prize` object and parse the tag strings into real lists.
+    # Step 1: quiz context keyed by quiz_id, nesting the flat prize.* columns
+    # into a `prize` object.
     ctx = {}
     for m in quiz_meta:
-        qid = m.get("quizId")
+        qid = m.get("quiz_id")
         if qid is None:
             continue
         prize = {
@@ -468,6 +497,7 @@ def build_respondent_profiles(flow, self, parent, json):
         if not any(prize.values()):
             prize = None
         ctx[qid] = {
+            "account_id": m.get("account_id"),
             "title": m.get("title"),
             "status": m.get("status"),
             "brand_name": m.get("brand_name"),
@@ -492,10 +522,10 @@ def build_respondent_profiles(flow, self, parent, json):
             }
         )
 
-    # Step 3: group scoring by respondent (email), bucketing per quiz.
-    # One scoring row == one submission. The respondent key is email, falling
-    # back to submission_id when email is missing. `quiz_index` maps quizId ->
-    # its bucket within the current respondent so repeat submissions accumulate.
+    # Step 3: group scoring by respondent (email), bucketing per quiz. One
+    # scoring row == one submission. `quiz_index` maps quiz_id -> bucket within
+    # the current respondent, so repeat submissions accumulate rather than
+    # opening a second bucket for the same quiz.
     profiles = {}
     order = []
     for s in scoring:
@@ -504,11 +534,14 @@ def build_respondent_profiles(flow, self, parent, json):
         if key not in profiles:
             profiles[key] = {
                 "respondent_id": s.get("submission_id"),
+                # Sourced from quiz_meta via ctx (scoring rows carry no
+                # account_id); filled from the first quiz row that resolves.
+                "account_id": None,
                 "identity": {
-                    "display_name": s.get("displayName"),
+                    "display_name": s.get("display_name"),
                     "email": email,
                     "anonymous": as_bool(s.get("anonymous")),
-                    "is_owner": as_bool(s.get("isOwner")),
+                    "is_owner": as_bool(s.get("is_owner")),
                     "placeholder_email": bool(email)
                     and email.startswith("temp@"),
                 },
@@ -521,13 +554,15 @@ def build_respondent_profiles(flow, self, parent, json):
         # anonymous / is_owner: any true across the respondent's rows wins.
         if as_bool(s.get("anonymous")):
             prof["identity"]["anonymous"] = True
-        if as_bool(s.get("isOwner")):
+        if as_bool(s.get("is_owner")):
             prof["identity"]["is_owner"] = True
 
         # Resolve (or create) this row's quiz bucket, pulling meta from ctx.
-        qid = s.get("quizId")
+        qid = s.get("quiz_id")
         if qid not in prof["quiz_index"]:
             meta = ctx.get(qid) or {}
+            if prof["account_id"] is None:
+                prof["account_id"] = meta.get("account_id")
             bucket = {
                 "quiz_id": qid,
                 "title": meta.get("title"),
@@ -547,9 +582,9 @@ def build_respondent_profiles(flow, self, parent, json):
         bucket = prof["quiz_index"][qid]
 
         # Metrics for THIS submission, summed into the bucket.
-        c = as_int(s.get("correctAnswers"))
-        i = as_int(s.get("incorrectAnswers"))
-        t = as_int(s.get("timeSeconds"))
+        c = as_int(s.get("correct_answers"))
+        i = as_int(s.get("incorrect_answers"))
+        t = as_int(s.get("completion_time"))
         bucket["correct"] += c
         bucket["incorrect"] += i
         bucket["time_seconds"] += t
@@ -559,7 +594,7 @@ def build_respondent_profiles(flow, self, parent, json):
         bucket["submissions"].append(
             {
                 "submission_id": sid,
-                "submitted_at": s.get("submittedAt"),
+                "submitted_at": s.get("submitted_at"),
                 "correct": c,
                 "incorrect": i,
                 "time_seconds": t,
@@ -583,16 +618,14 @@ def build_respondent_profiles(flow, self, parent, json):
         prof["context_record_id"] = (
             identifier if identifier is not None else prof["respondent_id"]
         )
+        prof["analysis"] = {}
         records.append(prof)
 
     self.output.base_profiles = records
-    # On the node's public output, not flow.private: private variables exist
-    # only when the @flow decorator declares a private_schema, and an
-    # undeclared private write fails inside this (first) node and kills the
-    # whole run. Downstream nodes ignore these unless mapped in.
     self.output.profiles_num = len(records)
     self.output.uploaded_num = 0
     self.output.preview_inputs = flow_input
+
     flow.private.base_profiles = records
 
 
@@ -604,32 +637,56 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
-    class _Bag:
-        """Attribute bag standing in for the engine's `self.output` / `flow.private`."""
+    class _Bag(dict):
+        """Attribute bag standing in for the engine's `flow` / `self` / `parent`.
 
-        def __init__(self):
-            self.__dict__.update()
+        Subclasses dict and keeps both views in sync, because the engine's
+        namespaces are reachable BOTH ways and different blocks pick different
+        forms: `flow["input"]` and `flow.input`, `self.input.rows` and
+        `dict(self.input)`. Missing keys read back as an empty _Bag rather than
+        raising, so `flow.input.get("absent_criteria")` behaves like the engine's
+        (chained access on an unmapped field yields nothing, not AttributeError).
+        """
+
+        def __init__(self, data=None):
+            super().__init__(data or {})
+
+        def __getattr__(self, name):
+            if name.startswith("__"):
+                raise AttributeError(name)
+            return self.setdefault(name, _Bag())
+
+        def __setattr__(self, name, value):
+            self[name] = value
 
         def as_dict(self):
-            return dict(self.__dict__)
+            return {
+                k: v.as_dict() if isinstance(v, _Bag) else v
+                for k, v in self.items()
+            }
 
-    class _FlowStub(dict):
-        """dict-like `flow` (flow.get / flow["input"]) that also carries .private."""
+    def _bag(data=None):
+        """Wrap nested mappings as _Bags so `flow.input.criteria.window_days` chains."""
+        if isinstance(data, dict):
+            return _Bag({k: _bag(v) for k, v in data.items()})
+        if isinstance(data, list):
+            return [_bag(v) for v in data]
+        return data
 
-        def __init__(self, data):
-            super().__init__(data)
-            self.private = _Bag()
+    def make_sandbox(flow_data, current_item=None, node_input=None):
+        flow = _bag(flow_data)
+        flow.private = _Bag()
 
-    def make_sandbox(flow_data, current_item=None):
         node = _Bag()
         node.output = _Bag()
-        # `parent` carries the foreach's current item for nodes inside the loop.
+        node.input = _bag(node_input or {})
+
         parent = _Bag()
         parent._current_item = current_item
         return {
-            "flow": _FlowStub(flow_data),
+            "flow": flow,
             "self": node,
             "parent": parent,
             "json": json,
@@ -658,7 +715,19 @@ def _(make_sandbox, run_tests, test_flow):
 
 @app.cell
 def _(run_tests, select_user):
-    mo.hstack([select_user, run_tests], justify="space-around")
+    test_stack = mo.hstack([select_user, run_tests], justify="space-around")
+    return (test_stack,)
+
+
+@app.cell
+def _(filter_stack):
+    filter_stack
+    return
+
+
+@app.cell
+def _(test_stack):
+    test_stack
     return
 
 
@@ -683,13 +752,16 @@ def _(result, run_tests, select_user):
         if run_tests.value and _selected_index is not None
         else None
     )
+    num_profiles = result.get("profiles_num") if run_tests.value else 0
     specific_result
-    return
+    return (num_profiles,)
 
 
 @app.cell
-def _(result):
-    mo.accordion({"Full Results List": result})
+def _(num_profiles, result):
+    mo.accordion(
+        {f"Full Results List (**Profile count: {num_profiles}**)": result}
+    )
     return
 
 

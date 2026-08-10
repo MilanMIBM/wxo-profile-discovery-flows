@@ -1,4 +1,4 @@
-# Document processing node — `docproc()`
+# Document processing node - `docproc()`
 
 Public preview. Extracts text (and optionally semantic key-value pairs) from a document.
 
@@ -18,29 +18,29 @@ Docker engine needs **≥ 20 GB RAM** for document processing.
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Unique node identifier. |
-| `task` | `str` | yes | `text_extraction` — extracts plain text. |
-| `display_name` | `str` | no | UI name. |
-| `description` | `str` | no | Node description. |
-| `output_format` | `DocProcOutputFormat` | no | See below. Default `docref`. |
-| `input_map` | `DataMap` | no | Structured input mapping. |
-| `document_structure` | `bool` | no | `true` adds document-assembly fields to the output. |
-| `kvp_schemas` | `list[DocProcKVPSchema]` | no | Schemas for key-value pair extraction. |
-| `enable_hw` | `bool` | no | `true` enables handwriting recognition. |
-| `kvp_model_name` | `str` | no | LLM for KVP extraction. Defaults to the WDU model, currently `watsonx/mistralai/mistral-small-3-1-24b-instruct-2503`. |
-| `kvp_force_schema_name` | `str` | no | Forces a schema by `document_type`. If unset/None, the engine matches the document against supplied schemas. |
-| `kvp_enable_text_hints` | `bool` | no | Text hints to assist KVP extraction. |
+| Param                   | Type                     | Req | Notes                                                                                                                 |
+| ----------------------- | ------------------------ | --- | --------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | `str`                    | yes | Unique node identifier.                                                                                               |
+| `task`                  | `str`                    | yes | `text_extraction` - extracts plain text.                                                                              |
+| `display_name`          | `str`                    | no  | UI name.                                                                                                              |
+| `description`           | `str`                    | no  | Node description.                                                                                                     |
+| `output_format`         | `DocProcOutputFormat`    | no  | See below. Default `docref`.                                                                                          |
+| `input_map`             | `DataMap`                | no  | Structured input mapping.                                                                                             |
+| `document_structure`    | `bool`                   | no  | `true` adds document-assembly fields to the output.                                                                   |
+| `kvp_schemas`           | `list[DocProcKVPSchema]` | no  | Schemas for key-value pair extraction.                                                                                |
+| `enable_hw`             | `bool`                   | no  | `true` enables handwriting recognition.                                                                               |
+| `kvp_model_name`        | `str`                    | no  | LLM for KVP extraction. Defaults to the WDU model, currently `watsonx/mistralai/mistral-small-3-1-24b-instruct-2503`. |
+| `kvp_force_schema_name` | `str`                    | no  | Forces a schema by `document_type`. If unset/None, the engine matches the document against supplied schemas.          |
+| `kvp_enable_text_hints` | `bool`                   | no  | Text hints to assist KVP extraction.                                                                                  |
 
 Input type: `DocProcInput` from `ibm_watsonx_orchestrate.flow_builder.types`.
 
 ## `DocProcOutputFormat`
 
-| Value | Response type | Use when |
-| --- | --- | --- |
-| `DocProcOutputFormat.docref` (default) | `TextExtractionResponse` | Large or structurally complex documents. Returns a **URL reference** to the stored result. |
-| `DocProcOutputFormat.object` | `TextExtractionObjectResponse` | Small documents, or when output must feed a downstream node. Returns **inline JSON**. |
+| Value                                  | Response type                  | Use when                                                                                   |
+| -------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `DocProcOutputFormat.docref` (default) | `TextExtractionResponse`       | Large or structurally complex documents. Returns a **URL reference** to the stored result. |
+| `DocProcOutputFormat.object`           | `TextExtractionObjectResponse` | Small documents, or when output must feed a downstream node. Returns **inline JSON**.      |
 
 With `object`, map all top-level fields of `TextExtractionObjectResponse` into downstream
 inputs or the flow output.
@@ -71,30 +71,30 @@ Known-compatible:
 
 Definable in **two places**, with a precedence rule.
 
-| Where | Behavior |
-| --- | --- |
+| Where                      | Behavior                                  |
+| -------------------------- | ----------------------------------------- |
 | Node spec (`kvp_schemas=`) | Used when the runtime input defines none. |
-| Runtime input payload | **Overrides** the node spec. |
+| Runtime input payload      | **Overrides** the node spec.              |
 
 Default is `null` in both. An **empty array** `[]` falls back to the built-in predefined
 schemas.
 
 ### `DocProcKVPSchema`
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `document_type` | `str` | Schema name; matched by `kvp_force_schema_name`. |
-| `document_description` | `str` | What the document is. |
-| `additional_prompt_instructions` | `str` | Extra extraction guidance. |
-| `fields` | `dict[str, DocProcField]` | Fields to extract. |
+| Field                            | Type                      | Notes                                            |
+| -------------------------------- | ------------------------- | ------------------------------------------------ |
+| `document_type`                  | `str`                     | Schema name; matched by `kvp_force_schema_name`. |
+| `document_description`           | `str`                     | What the document is.                            |
+| `additional_prompt_instructions` | `str`                     | Extra extraction guidance.                       |
+| `fields`                         | `dict[str, DocProcField]` | Fields to extract.                               |
 
 ### `DocProcField`
 
-| Field | Type | Notes |
-| --- | --- | --- |
+| Field         | Type  | Notes                                   |
+| ------------- | ----- | --------------------------------------- |
 | `description` | `str` | What the field is and where it appears. |
-| `example` | `str` | Example value. |
-| `default` | `str` | Value when absent. |
+| `example`     | `str` | Example value.                          |
+| `default`     | `str` | Value when absent.                      |
 
 ```py
 from ibm_watsonx_orchestrate.flow_builder.types import DocProcKVPSchema, DocProcField

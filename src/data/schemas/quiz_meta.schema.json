@@ -2,11 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_meta.schema.json",
   "title": "quiz_meta",
-  "description": "One row per quiz: quiz-level metadata, branding, and prize. Source table data/tables/quiz_meta.csv. quizId is the primary key referenced by scoring.csv, details.csv, and quiz_structure.csv; supplies the `quiz_context` the enrichment template looks up per quiz. The `prize.*` columns together form the optional prize object (all blank when the quiz has no prize, e.g. prize_type 'none').",
+  "description": "One row per quiz: quiz-level metadata, branding, and prize. Source table data/tables/quiz_meta.csv. quiz_id is the primary key referenced by scoring.csv, details.csv, and quiz_structure.csv; supplies the `quiz_context` the enrichment template looks up per quiz. The `prize.*` columns together form the optional prize object (all blank when the quiz has no prize, e.g. prize_type 'none'). account_id allows for filtering by client environment/account scope.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "quizId",
+    "account_id",
+    "quiz_id",
     "title",
     "brand_name",
     "language",
@@ -20,8 +21,13 @@
     "prize_type"
   ],
   "properties": {
-    "quizId": {
-      "description": "Primary key. Referenced by scoring.quizId, details.quizId, quiz_structure.quizId.",
+    "account_id": {
+      "description": "Account this quiz belongs to, used for filtering values to a particular client's environment.",
+      "type": "string",
+      "format": "uuid"
+    },
+    "quiz_id": {
+      "description": "Primary key. Referenced by scoring.quiz_id, details.quiz_id, quiz_structure.quiz_id.",
       "type": "string",
       "format": "uuid"
     },

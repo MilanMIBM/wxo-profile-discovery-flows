@@ -1,7 +1,7 @@
-# Conditions branch node — `conditions()`
+# Conditions branch node - `conditions()`
 
 Exclusive routing. Evaluates conditions in declaration order and follows **only the first
-match** — if/elif/else semantics.
+match** - if/elif/else semantics.
 
 ```py
 from ibm_watsonx_orchestrate.flow_builder.flows import Branch
@@ -16,11 +16,11 @@ declared by the `to_node` of each condition.
 
 Returns the `Branch`, so calls chain.
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `to_node` | `Node` | yes | Node to run when this condition matches. |
-| `expression` | `str` | cond. | Python expression. Required unless `default=True`. |
-| `default` | `bool` | no | Marks the fallback path. Declare it last. |
+| Param        | Type   | Req   | Notes                                              |
+| ------------ | ------ | ----- | -------------------------------------------------- |
+| `to_node`    | `Node` | yes   | Node to run when this condition matches.           |
+| `expression` | `str`  | cond. | Python expression. Required unless `default=True`. |
+| `default`    | `bool` | no    | Marks the fallback path. Declare it last.          |
 
 ## Call form
 
@@ -50,19 +50,19 @@ wired separately. The branch itself gets no outbound `edge()` calls.
 - Two or more exit paths supported.
 - Evaluation is top-to-bottom; the first matching expression wins and no further conditions
   are evaluated.
-- Only the matching path runs — a single path continues downstream.
+- Only the matching path runs - a single path continues downstream.
 - A branch node is the one exception to "multiple outgoing edges run in parallel".
 - The `default=True` condition takes no `expression`. Provide one, or unmatched input has
   nowhere to go.
 
 ## Versus parallel
 
-| | `conditions()` | `parallel_conditions()` |
-| --- | --- | --- |
+|            | `conditions()`                | `parallel_conditions()` |
+| ---------- | ----------------------------- | ----------------------- |
 | Processing | First matching condition only | All matching conditions |
-| Semantics | Sequential, if-else | Concurrent |
-| Use case | Exclusive paths | Concurrent execution |
-| Merging | Single path continues | Waits for all paths |
+| Semantics  | Sequential, if-else           | Concurrent              |
+| Use case   | Exclusive paths               | Concurrent execution    |
+| Merging    | Single path continues         | Waits for all paths     |
 
 See [09-parallel-node.md](09-parallel-node.md).
 

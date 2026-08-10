@@ -1,14 +1,14 @@
-# Multi-language — `target_locales()`
+# Multi-language - `target_locales()`
 
 Presents user activities in each user's preferred language at runtime. Applies to user
 activity nodes.
 
 ## Flow methods
 
-| Method | Notes |
-| --- | --- |
-| `aflow.target_locales([...])` | Locales to translate into. |
-| `aflow.source_locale("<code>")` | Source language. Default `en`. |
+| Method                            | Notes                                                                              |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `aflow.target_locales([...])`     | Locales to translate into.                                                         |
+| `aflow.source_locale("<code>")`   | Source language. Default `en`.                                                     |
 | `aflow.translation_enabled(bool)` | Default `True`. `False` → `target_locales()` is ignored and no translations apply. |
 
 ```py
@@ -56,21 +56,21 @@ orchestrate tools translation-export \
   --translation translations.csv
 ```
 
-| Flag | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `--kind` / `-k` | `str` | yes | Must be `flow`. |
-| `--name` / `-n` | `str` | cond. | Imported flow tool name. Required unless `--file`. |
+| Flag            | Type  | Req   | Notes                                               |
+| --------------- | ----- | ----- | --------------------------------------------------- |
+| `--kind` / `-k` | `str` | yes   | Must be `flow`.                                     |
+| `--name` / `-n` | `str` | cond. | Imported flow tool name. Required unless `--file`.  |
 | `--file` / `-f` | `str` | cond. | Path to a flow JSON file. Required unless `--name`. |
-| `--translation` | `str` | yes | Path for the CSV. |
+| `--translation` | `str` | yes   | Path for the CSV.                                   |
 
 ### CSV shape
 
-| Column | Contents |
-| --- | --- |
-| `key` | Unique identifier for the translatable element. |
-| `en` | Source text (or your configured source locale). |
-| `locale` | Source locale code. |
-| one per target locale | Your translations. |
+| Column                | Contents                                        |
+| --------------------- | ----------------------------------------------- |
+| `key`                 | Unique identifier for the translatable element. |
+| `en`                  | Source text (or your configured source locale). |
+| `locale`              | Source locale code.                             |
+| one per target locale | Your translations.                              |
 
 ```csv
 key,en,locale,fr,es

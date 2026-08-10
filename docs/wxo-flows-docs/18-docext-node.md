@@ -1,4 +1,4 @@
-# Document extractor node — `docext()`
+# Document extractor node - `docext()`
 
 Public preview. Extracts named fields from a document.
 
@@ -20,19 +20,19 @@ Docker engine needs ≥ 20 GB RAM. Define `WO_INSTANCE`, `WO_API_KEY`, and
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Unique node identifier. |
-| `llm` | `str` | yes | LLM for field extraction. Default `watsonx/mistralai/mistral-small-3-1-24b-instruct-2503`. |
-| `fields` | `object` | yes | Instance of your fields model. |
-| `display_name` | `str` | no | UI name. |
-| `description` | `str` | no | Node description. |
-| `input_map` | `DataMap` | no | Structured input mapping. |
-| `enable_hw` | `bool` | no | `true` enables handwriting recognition. |
-| `min_confidence` | `float` | no | Minimum acceptable confidence for an extracted value. |
-| `review_fields` | `List[str]` | no | Fields requiring user review. |
-| `enable_review` | `bool` | no | Human-in-the-loop toggle. Default `False`. |
-| `field_extraction_method` | `str` | no | `classic` (default, Unstructured Document Extractor) or `layout` (Structured Document Extractor). |
+| Param                     | Type        | Req | Notes                                                                                             |
+| ------------------------- | ----------- | --- | ------------------------------------------------------------------------------------------------- |
+| `name`                    | `str`       | yes | Unique node identifier.                                                                           |
+| `llm`                     | `str`       | yes | LLM for field extraction. Default `watsonx/mistralai/mistral-small-3-1-24b-instruct-2503`.        |
+| `fields`                  | `object`    | yes | Instance of your fields model.                                                                    |
+| `display_name`            | `str`       | no  | UI name.                                                                                          |
+| `description`             | `str`       | no  | Node description.                                                                                 |
+| `input_map`               | `DataMap`   | no  | Structured input mapping.                                                                         |
+| `enable_hw`               | `bool`      | no  | `true` enables handwriting recognition.                                                           |
+| `min_confidence`          | `float`     | no  | Minimum acceptable confidence for an extracted value.                                             |
+| `review_fields`           | `List[str]` | no  | Fields requiring user review.                                                                     |
+| `enable_review`           | `bool`      | no  | Human-in-the-loop toggle. Default `False`.                                                        |
+| `field_extraction_method` | `str`       | no  | `classic` (default, Unstructured Document Extractor) or `layout` (Structured Document Extractor). |
 
 Input type: `DocExtInput` (or `DocumentProcessingCommonInput`) from
 `ibm_watsonx_orchestrate.flow_builder.types`.
@@ -50,12 +50,12 @@ field: DocExtConfigField = Field(
 
 ### `DocExtConfigField`
 
-| Param | Type | Notes |
-| --- | --- | --- |
-| `name` | `str` | Human-readable field name. |
-| `field_name` | `str` | Machine name; the key in the extracted output. |
-| `type` | `str` | e.g. `string`, `date`. |
-| `description` | `str` | Guides the LLM on what to extract. |
+| Param         | Type  | Notes                                          |
+| ------------- | ----- | ---------------------------------------------- |
+| `name`        | `str` | Human-readable field name.                     |
+| `field_name`  | `str` | Machine name; the key in the extracted output. |
+| `type`        | `str` | e.g. `string`, `date`.                         |
+| `description` | `str` | Guides the LLM on what to extract.             |
 
 ```py
 from ibm_watsonx_orchestrate.flow_builder.types import DocExtConfigField
@@ -107,7 +107,7 @@ This only works when the flow runs from a **chat session**.
 
 ## Extraction runtime
 
-| `field_extraction_method` | Runtime |
-| --- | --- |
-| `classic` (default) | Unstructured Document Extractor. |
-| `layout` | Structured Document Extractor. |
+| `field_extraction_method` | Runtime                          |
+| ------------------------- | -------------------------------- |
+| `classic` (default)       | Unstructured Document Extractor. |
+| `layout`                  | Structured Document Extractor.   |

@@ -1,4 +1,4 @@
-# Document classifier node — `docclassifier()`
+# Document classifier node - `docclassifier()`
 
 Public preview. Classifies a document into one of a defined set of classes.
 
@@ -19,16 +19,16 @@ Docker engine needs ≥ 20 GB RAM. Define `WO_INSTANCE`, `WO_API_KEY`, and
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Unique node identifier. |
-| `llm` | `str` | yes | LLM for classification. Default `watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8`. |
-| `classes` | `object` | yes | Instance of your classes model. |
-| `display_name` | `str` | no | UI name. |
-| `description` | `str` | no | Node description. |
-| `min_confidence` | `float` | no | Minimum confidence threshold. |
-| `input_map` | `DataMap` | no | Structured input mapping. |
-| `enable_review` | `bool` | no | Human-in-the-loop toggle. Default `False`. |
+| Param            | Type      | Req | Notes                                                                                        |
+| ---------------- | --------- | --- | -------------------------------------------------------------------------------------------- |
+| `name`           | `str`     | yes | Unique node identifier.                                                                      |
+| `llm`            | `str`     | yes | LLM for classification. Default `watsonx/meta-llama/llama-4-maverick-17b-128e-instruct-fp8`. |
+| `classes`        | `object`  | yes | Instance of your classes model.                                                              |
+| `display_name`   | `str`     | no  | UI name.                                                                                     |
+| `description`    | `str`     | no  | Node description.                                                                            |
+| `min_confidence` | `float`   | no  | Minimum confidence threshold.                                                                |
+| `input_map`      | `DataMap` | no  | Structured input mapping.                                                                    |
+| `enable_review`  | `bool`    | no  | Human-in-the-loop toggle. Default `False`.                                                   |
 
 Input type: `DocumentProcessingCommonInput`.
 
@@ -38,8 +38,8 @@ Each class is a `DocClassifierClass` field on a `BaseModel`.
 
 ### `DocClassifierClass`
 
-| Param | Type | Notes |
-| --- | --- | --- |
+| Param        | Type  | Notes                                           |
+| ------------ | ----- | ----------------------------------------------- |
 | `class_name` | `str` | The class label assigned to matching documents. |
 
 ```py

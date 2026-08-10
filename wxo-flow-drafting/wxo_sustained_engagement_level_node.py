@@ -16,7 +16,7 @@ with app.setup:
 
     from pathlib import Path
     from pydantic import BaseModel, Field
-    from typing import List, Dict
+    from typing import List, Dict, Any
     from pymongo import MongoClient
     from dotenv import load_dotenv
 
@@ -27,17 +27,12 @@ with app.setup:
     from src.helpers.logic_block import logic_block
 
     class SustainedEngagementOutput(BaseModel):
-        """Outputs of the sustained_engagement_level script node — all optional."""
+        """Outputs of the sustained_engagement_level script node - all optional."""
 
-        respondent_id: str = Field(
-            default="", description="Id of the respondent."
-        )
+        respondent_id: str = Field(default="", description="Id of the respondent.")
         sustained_engagement_level: int = Field(
             default=0,
             description="Highest engagement bracket that qualified; 0 when none did.",
-        )
-        respondent_id_obj: dict = Field(
-            default_factory=dict, description='{"respondent_id": ...}'
         )
         sustained_engagement_level_obj: dict = Field(
             default_factory=dict,
@@ -45,9 +40,6 @@ with app.setup:
         )
         result: dict = Field(
             default_factory=dict, description="Both fields together, as a dict."
-        )
-        result_json: str = Field(
-            default="", description="Both fields together, as a JSON string."
         )
         preview_inputs: dict = Field(
             default_factory=dict,
@@ -103,7 +95,7 @@ def _():
     return (rewrite_tables,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(postgresql_engine, rewrite_tables):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
@@ -129,9 +121,7 @@ def _(postgresql_engine, rewrite_tables):
         if name in existing and rewrite_tables:
             print(f"{name}: dropping existing table")
             with postgresql_engine.connect() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         # Always recreate the table, even if it already exists
@@ -155,25 +145,43 @@ def _(postgresql_engine, rewrite_tables):
 @app.cell
 def _():
     retrieve_number = mo.ui.number(
-        label="**Control number of records to retrieve:**",
+        label="**Control number of records to retrieve :**",
         start=0,
         stop=1000,
         step=1,
-        value=50,
+        value=3,
     )
-    retrieve_number
+    # retrieve_number
     return (retrieve_number,)
 
 
+@app.cell
+def _(retrieve_number, select_account):
+    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
+    return (filter_stack,)
+
+
 @app.cell(hide_code=True)
-def _(postgresql_engine, retrieve_number):
-    quiz_meta = mo.sql(
-        f"""
-        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
-        """,
-        output=False,
-        engine=postgresql_engine,
-    )
+def _(postgresql_engine, retrieve_number, select_account):
+    if select_account.value:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            WHERE "account_id" = '{select_account.value}'
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
+    else:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
     return (quiz_meta,)
 
 
@@ -182,7 +190,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
         SELECT * FROM "quiz_structure"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -196,7 +204,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
         SELECT * FROM "quiz_details" 
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -210,7 +218,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
         SELECT * FROM "quiz_scoring"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -231,12 +239,24 @@ def _():
 def _(postgresql_engine):
     quiz_ids_unique = mo.sql(
         f"""
-        SELECT DISTINCT "quizId" FROM "quiz_structure"
+        SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
         engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
+
+
+@app.cell
+def _(postgresql_engine):
+    account_ids_unique = mo.sql(
+        f"""
+        SELECT DISTINCT "account_id" FROM "quiz_meta"
+        """,
+        output=False,
+        engine=postgresql_engine,
+    )
+    return (account_ids_unique,)
 
 
 @app.cell(hide_code=True)
@@ -252,10 +272,22 @@ def _(postgresql_engine):
 
 
 @app.cell
+def _(account_ids_unique):
+    account_id_list = account_ids_unique.account_id.to_list()
+    select_account = mo.ui.dropdown(
+        label="**Select account to filter by :**",
+        options=account_id_list,
+        # value=account_id_list[0],
+    )
+    # select_account
+    return (select_account,)
+
+
+@app.cell
 def _(user_emails):
     user_emails_list = user_emails.email.to_list()
     select_user = mo.ui.dropdown(
-        label="**Select user email:**",
+        label="**Select user email :**",
         options=user_emails_list,
         value=user_emails_list[0],
     )
@@ -265,30 +297,28 @@ def _(user_emails):
 
 @app.cell
 def _(quiz_ids_unique):
-    quiz_id_list = quiz_ids_unique.quizId.to_list()
+    quiz_id_list = quiz_ids_unique.quiz_id.to_list()
     select_quiz_id = mo.ui.dropdown(
-        label="**Select Quiz ID:**", options=quiz_id_list, value=quiz_id_list[0]
+        label="**Select Quiz ID :**",
+        options=quiz_id_list,
+        value=quiz_id_list[0],
     )
     # select_quiz_id
     return
 
 
-@app.function
+@app.function(hide_code=True)
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = (
-        df.to_dicts()
-        if hasattr(df, "to_dicts")
-        else df.to_dict(orient="records")
-    )
+    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
     }
 
 
-@app.function
+@app.function(hide_code=True)
 def jsonable_row(row):
     """Convert a dataframe row mapping to a plain JSON-serialisable dict.
 
@@ -306,16 +336,10 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return (
-                None
-                if val != val or val in (float("inf"), float("-inf"))
-                else val
-            )
+            return None if val != val or val in (float("inf"), float("-inf")) else val
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(
-            val, (datetime.datetime, datetime.date, datetime.time)
-        ):
+        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -348,7 +372,7 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
-    test_flow = {"retrieve_tables": {"output": db_records}}
+    test_flow = {"retrieved_tables": db_records}
     return (test_flow,)
 
 
@@ -379,45 +403,42 @@ def _():
 
 
 @app.function
-# 🧩 Highest sustained-engagement bracket the respondent qualifies for.
-#
-# Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-# `self` and `parent` are injected, `json` and `datetime` are pre-bound (no
-# imports), and there is no return value -- output happens by assignment.
-#
-# Reads:  parent._current_item -- this iteration's respondent profile, whose
-#                                 nested quizzes[].submissions[] are flattened
-#                                 back into submission rows here
-#         flow.input.levels    -- optional bracket list; defaults below
-# Writes: self.output.respondent_id / .sustained_engagement_level  (raw values)
-#         self.output.*_obj                                        (single-key dicts)
-#         self.output.result / .result_json                        (all fields)
-#
-# Declare in the flow only the outputs you consume -- assigning an undeclared
-# output is harmless, and a declared-but-unassigned output is just empty.
-#
-# One completion per distinct quizId at its EARLIEST submittedAt; keep a
-# maximally-spaced subsequence of those dates (each >= min_days_between apart);
-# a bracket passes if any run of `number_of_quizzes` spans <= timeframe_days;
-# emit the single highest passing bracket's level (None when none qualify).
 @logic_block(
     display_name="Sustained engagement level",
     output_schema=SustainedEngagementOutput,
 )
 def sustained_engagement_level(flow, self, parent, json, datetime):
-    """Scores a respondent's submission history against a ladder of engagement brackets and emits the highest one whose quiz-count, spacing and timeframe conditions all hold."""
-    # This node runs INSIDE the foreach, so its data comes from the current
-    # iteration's profile, not from flow.input -- flow.input is identical on
-    # every iteration and would score all respondents the same.
-    # Cursor first: a data map targeting `self.input.input` never lands (the
-    # field name collides with the input container itself), so self["input"]
-    # arrived {}. The mapped fallback keeps working if a named field is wired.
-    profile = dict(parent._current_item or {}) or (self["input"] or {}).get(
-        "profile"
-    ) or {}
+    """Awards the highest engagement bracket a respondent's completion history qualifies for.
 
-    # build_respondent_profiles emits a nested profile (quizzes[].submissions[]);
-    # flatten it back to the one-row-per-submission shape this block scores.
+    Runs in the flow engine's restricted sandbox, NOT as a normal module:
+    `flow`, `self` and `parent` are injected, `json` and `datetime` are
+    pre-bound (no imports), and there is no return value -- output happens by
+    assignment.
+
+    Reads:  parent._current_item -- this iteration's respondent profile, whose
+                                    nested quizzes[].submissions[] are flattened
+                                    back into submission rows here
+            flow.input.sustained_engagement_level_criteria
+                .levels -- optional bracket list; defaults below
+    Writes: self.output.respondent_id / .sustained_engagement_level (raw values)
+            self.output.*_obj   (single-key dicts)
+            self.output.result  (all fields)
+
+    Declare in the flow only the outputs you consume -- assigning an undeclared
+    output is harmless, and a declared-but-unassigned output is just empty.
+
+    One completion per distinct quiz_id at its EARLIEST submitted_at. A bracket
+    cuts its timeframe_days window into consecutive min_days_between
+    sub-periods and demands `number_of_quizzes` completions in EVERY one of
+    them, so it measures a sustained rhythm rather than a single burst:
+    7 days / 30 days / 1 quiz is 4 quizzes a month, one per week, and the same
+    cadence at 2 quizzes is 8 a month. A bracket passes when some window
+    anchored on a completion sustains that cadence end to end; the single
+    highest passing bracket's level is emitted (None when none qualify)."""
+
+    profile = dict(parent._current_item or {}) or {}
+
+    # Flatten the nested profile back to the one-row-per-submission shape this block scores.
     rows = []
     for q in profile.get("quizzes") or []:
         qid = q.get("quiz_id")
@@ -426,14 +447,19 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
         for s in q.get("submissions") or []:
             rows.append(
                 {
-                    "quizId": qid,
-                    "submittedAt": s.get("submitted_at"),
+                    "quiz_id": qid,
+                    "submitted_at": s.get("submitted_at"),
                     "_id": s.get("submission_id"),
                 }
             )
 
     identifier = profile.get("respondent_id")
-    levels = flow["input"].get("levels") or [
+
+    # Flow input variables to adjust the behavior of the node at runtime.
+    criteria = flow.input.get("sustained_engagement_level_criteria") or {}
+
+    # number_of_quizzes is PER SUB-PERIOD, so each level is a denser rhythm over the same month: 1/week = 4 a month, 2/week = 8, 3/week = 12.
+    levels = criteria.get("levels") or [
         {
             "level": "1",
             "timeframe_days": 30,
@@ -454,9 +480,7 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
         },
     ]
 
-    # ISO date string -> integer day count, so date gaps become plain
-    # subtraction. Only the leading YYYY-MM-DD is read, so full timestamps
-    # work too. None when unparseable.
+    # ISO date -> integer day count, so date gaps become plain subtraction. Only the leading YYYY-MM-DD is read, so full timestamps work too.
     def epoch_day(value):
         if not value:
             return None
@@ -465,11 +489,8 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
         except ValueError:
             return None
 
-    # Collapse many submissions to the EARLIEST one per distinct quizId, as
-    # {quizId: {"epoch_day": int, <extra fields from that earliest row>}}.
-    def earliest_completions(
-        rows, key="quizId", date_field="submittedAt", extra=()
-    ):
+    # One completion per distinct quiz_id -- its earliest submission, carrying the named `extra` fields from that same row.
+    def earliest_completions(rows, key="quiz_id", date_field="submitted_at", extra=()):
         out = {}
         for row in rows:
             key_val = row.get(key)
@@ -484,70 +505,82 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
                 out[key_val] = record
         return out
 
-    # Greedily keep a maximally-spaced subsequence: walking the sorted days,
-    # keep each one at least `min_gap` days after the last kept one.
-    def greedy_spaced(days, min_gap):
-        kept = []
-        for day in sorted(days):
-            if not kept or (day - kept[-1]) >= min_gap:
-                kept.append(day)
-        return kept
-
-    # True if any run of `count` consecutive (ascending) days spans <= `span`.
-    def has_run_within(sorted_days, count, span):
-        if count <= 0:
-            return True
-        if len(sorted_days) < count:
+    # Does a window starting at `start` sustain the cadence? The window is cut into consecutive `gap`-day sub-periods and EVERY one must hold at least `per_period` completions -- a burst in a single sub-period fails, which is what separates sustained engagement from one busy week.
+    def sustains_cadence(sorted_days, start, window, gap, per_period):
+        periods = window // gap
+        if periods <= 0:
             return False
-        for i in range(len(sorted_days) - count + 1):
-            if (sorted_days[i + count - 1] - sorted_days[i]) <= span:
-                return True
-        return False
+        for p in range(periods):
+            lo = start + p * gap
+            hi = lo + gap
+            found = 0
+            for day in sorted_days:
+                if lo <= day < hi:
+                    found += 1
+                elif day >= hi:
+                    break
+            if found < per_period:
+                return False
+        return True
 
     # Step 1: one completion per quiz, as a sorted list of day counts.
     earliest = earliest_completions(rows)
     ordinals = sorted(rec["epoch_day"] for rec in earliest.values())
 
-    # Step 2: rank every passing bracket so a plain sort picks the winner.
-    # Key = [need, gap, -window, -idx, level]; ascending sort + take the last
-    # => most quizzes, then widest gap, then narrowest window, then the
-    # earlier-listed bracket. Each bracket spaces the dates by its own gap.
+    # Step 2: rank every passing bracket so a plain sort picks the winner. Key = [total, gap, -window, -idx, level]; ascending sort + take the last => most quizzes demanded, then widest gap, then narrowest window, then the earlier-listed bracket. A bracket passes when SOME window anchored on a completion sustains its cadence end to end.
     ranked = []
     for idx, b in enumerate(levels):
-        need = int(b.get("number_of_quizzes") or 1)
+        per_period = int(b.get("number_of_quizzes") or 1)
         gap = int(b.get("min_days_between") or 0)
         window = int(b.get("timeframe_days") or 0)
-        kept = greedy_spaced(ordinals, gap)
-        if has_run_within(kept, need, window):
-            ranked.append([need, gap, -window, -idx, str(b.get("level"))])
+        if gap <= 0 or window <= 0:
+            continue
+        # Anchoring on each completion is enough: a qualifying window can always
+        # be slid forward until its first sub-period starts on a completion.
+        if any(
+            sustains_cadence(ordinals, start, window, gap, per_period)
+            for start in ordinals
+        ):
+            total = (window // gap) * per_period
+            ranked.append([total, gap, -window, -idx, str(b.get("level"))])
 
     # Step 3: winner is the top-ranked bracket's level (None if none passed).
-    level = int(sorted(ranked)[-1][4]) if ranked else None
+    winner = sorted(ranked)[-1] if ranked else None
+    level = int(winner[4]) if winner else None
 
-    # respondent_id = identifier if given, else the first row's _id, else None.
-    # level is JSON null when no bracket qualifies.
+    # Plain-language restatement of the winning bracket, so consumers see why the level was awarded and not just the number.
+    def describe(bracket):
+        per_period = int(bracket.get("number_of_quizzes") or 1)
+        gap = int(bracket.get("min_days_between") or 0)
+        window = int(bracket.get("timeframe_days") or 0)
+        periods = window // gap if gap > 0 else 0
+        quizzes = "1 quiz" if per_period == 1 else f"{per_period} quizzes"
+        days = "day" if gap == 1 else f"{gap} days"
+        return (
+            f"Completes at least {quizzes} every {days} for {window} days "
+            f"running ({periods * per_period} in total)."
+        )
+
+    # Key position 3 holds -idx, so negating it indexes back into `levels`.
+    rule_description = describe(levels[-winner[3]]) if winner else None
+
+    # The flow's identifier wins; the first submission's id is the fallback.
     respondent_id = (
-        identifier
-        if identifier is not None
-        else (rows[0].get("_id") if rows else None)
+        identifier if identifier is not None else (rows[0].get("_id") if rows else None)
     )
     result = {
         "respondent_id": respondent_id,
-        "sustained_engagement_level": level,
+        "sustained_engagement_level": level if level is not None else 0,
+        "rule_description": rule_description,
     }
 
-    # Three flavors per field: the raw value, the same value wrapped as a
-    # single-key dict, and result / result_json holding every field together.
+    # Each field is published three ways -- raw, wrapped as a single-key dict, and inside `result` -- so a data map can bind whichever shape it needs.
     self.output.respondent_id = respondent_id
-    self.output.sustained_engagement_level = level
 
-    self.output.respondent_id_obj = {"respondent_id": respondent_id}
-    self.output.sustained_engagement_level_obj = {
-        "sustained_engagement_level": level
-    }
+    self.output.sustained_engagement_level = level
+    self.output.sustained_engagement_level_obj = {"sustained_engagement_level": level}
 
     self.output.result = result
-    self.output.result_json = json.dumps(result)
     self.output.preview_inputs = profile
 
 
@@ -559,32 +592,55 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
-    class _Bag:
-        """Attribute bag standing in for the engine's `self.output` / `flow.private`."""
+    class _Bag(dict):
+        """Attribute bag standing in for the engine's `flow` / `self` / `parent`.
 
-        def __init__(self):
-            self.__dict__.update()
+        Subclasses dict and keeps both views in sync, because the engine's
+        namespaces are reachable BOTH ways and different blocks pick different
+        forms: `flow["input"]` and `flow.input`, `self.input.rows` and
+        `dict(self.input)`. Missing keys read back as an empty _Bag rather than
+        raising, so `flow.input.get("absent_criteria")` behaves like the engine's
+        (chained access on an unmapped field yields nothing, not AttributeError).
+        """
+
+        def __init__(self, data=None):
+            super().__init__(data or {})
+
+        def __getattr__(self, name):
+            if name.startswith("__"):
+                raise AttributeError(name)
+            return self.setdefault(name, _Bag())
+
+        def __setattr__(self, name, value):
+            self[name] = value
 
         def as_dict(self):
-            return dict(self.__dict__)
+            return {
+                k: v.as_dict() if isinstance(v, _Bag) else v for k, v in self.items()
+            }
 
-    class _FlowStub(dict):
-        """dict-like `flow` (flow.get / flow["input"]) that also carries .private."""
+    def _bag(data=None):
+        """Wrap nested mappings as _Bags so `flow.input.criteria.window_days` chains."""
+        if isinstance(data, dict):
+            return _Bag({k: _bag(v) for k, v in data.items()})
+        if isinstance(data, list):
+            return [_bag(v) for v in data]
+        return data
 
-        def __init__(self, data):
-            super().__init__(data)
-            self.private = _Bag()
+    def make_sandbox(flow_data, current_item=None, node_input=None):
+        flow = _bag(flow_data)
+        flow.private = _Bag()
 
-    def make_sandbox(flow_data, current_item=None):
         node = _Bag()
         node.output = _Bag()
-        # `parent` carries the foreach's current item for nodes inside the loop.
+        node.input = _bag(node_input or {})
+
         parent = _Bag()
         parent._current_item = current_item
         return {
-            "flow": _FlowStub(flow_data),
+            "flow": flow,
             "self": node,
             "parent": parent,
             "json": json,
@@ -595,27 +651,89 @@ def _():
 
 
 @app.cell
-def _(build_respondent_profiles, make_sandbox, run_tests, test_flow):
+def _():
+    test_timeframe_days = mo.ui.number(
+        label="**Timeframe days  :**",
+        start=1,
+        stop=365,
+        step=1,
+        value=30,
+    )
+    return (test_timeframe_days,)
+
+
+@app.cell
+def _():
+    test_min_days_between = mo.ui.number(
+        label="**Sub-period length in days  :**",
+        start=1,
+        stop=90,
+        step=1,
+        value=7,
+    )
+    return (test_min_days_between,)
+
+
+@app.cell
+def _():
+    test_number_of_levels = mo.ui.slider(
+        label="**Number of brackets** *(bracket N = N quizzes per sub-period)* **:**",
+        start=1,
+        stop=10,
+        step=1,
+        value=3,
+        show_value=True,
+    )
+    return (test_number_of_levels,)
+
+
+@app.cell
+def _(
+    build_respondent_profiles,
+    make_sandbox,
+    run_tests,
+    test_flow,
+    test_min_days_between,
+    test_number_of_levels,
+    test_timeframe_days,
+):
     if run_tests.value:
         # Mirrors the real flow: build runs ONCE over the whole table bundle...
-        build_sandbox = make_sandbox(
-            {**test_flow, "input": {"identifier": None}}
-        )
+        build_sandbox = make_sandbox({"input": {"identifier": None, **test_flow}})
         build_respondent_profiles.run(**build_sandbox)
-        _profiles = build_sandbox["self"].output.profiles
+        _profiles = build_sandbox["self"].output.base_profiles
 
         # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each
         # iteration seeing its own profile via parent._current_item.
+        # The criteria the scorer reads off flow.input; {} would also work
+        # (every knob falls back to its default), this exercises the wiring.
+        # Bracket N demands N quizzes PER SUB-PERIOD -- at 7 days over 30, that
+        # is 4N a month -- so the ladder is generated from the three knobs
+        # rather than spelled out one entry at a time.
+        _criteria = {
+            "sustained_engagement_level_criteria": {
+                "levels": [
+                    {
+                        "level": str(_n),
+                        "timeframe_days": int(test_timeframe_days.value),
+                        "min_days_between": int(test_min_days_between.value),
+                        "number_of_quizzes": _n,
+                    }
+                    for _n in range(1, int(test_number_of_levels.value) + 1)
+                ]
+            }
+        }
+
         _engagement = []
         for _profile in _profiles:
-            _sandbox = make_sandbox({**test_flow, "input": {}}, _profile)
+            _sandbox = make_sandbox({**test_flow, "input": _criteria}, _profile)
             sustained_engagement_level.run(**_sandbox)
             _engagement.append(_sandbox["self"].output.result)
 
         result = {
-            "profiles": _profiles,
             "engagement": _engagement,
-            "private": build_sandbox["flow"].private.as_dict(),
+            "base_profiles": _profiles,
+            # "private": build_sandbox["flow"].private.as_dict(),
         }
     else:
         result = {}
@@ -623,8 +741,41 @@ def _(build_respondent_profiles, make_sandbox, run_tests, test_flow):
 
 
 @app.cell
+def _(test_min_days_between, test_number_of_levels, test_timeframe_days):
+    specific_test_stack = mo.vstack(
+        [test_timeframe_days, test_min_days_between, test_number_of_levels],
+        align="start",
+    )
+    return (specific_test_stack,)
+
+
+@app.cell
+def _(result, run_tests):
+    num_profiles = len(result.get("base_profiles")) if run_tests.value else 0
+    return (num_profiles,)
+
+
+@app.cell
 def _(run_tests, select_user):
-    mo.hstack([select_user, run_tests], justify="space-around")
+    test_stack = mo.hstack([select_user, run_tests], justify="space-around")
+    return (test_stack,)
+
+
+@app.cell
+def _(specific_test_stack):
+    specific_test_stack
+    return
+
+
+@app.cell
+def _(filter_stack):
+    filter_stack
+    return
+
+
+@app.cell
+def _(test_stack):
+    test_stack
     return
 
 
@@ -637,7 +788,7 @@ def _(result, run_tests, select_user):
         next(
             (
                 i
-                for i, prof in enumerate(result.get("profiles") or [])
+                for i, prof in enumerate(result.get("base_profiles") or [])
                 if prof.get("identity", {}).get("email") == select_user.value
             ),
             None,
@@ -647,15 +798,15 @@ def _(result, run_tests, select_user):
     )
 
     {
-        "profile": result.get("profiles")[_selected_index],
+        "profile": result.get("base_profiles")[_selected_index],
         "engagement": result.get("engagement")[_selected_index],
     } if run_tests.value and _selected_index is not None else None
     return
 
 
 @app.cell
-def _(result):
-    mo.accordion({"Full Results List": result})
+def _(num_profiles, result):
+    mo.accordion({f"Full Results List (**Profile count: {num_profiles}**)": result})
     return
 
 

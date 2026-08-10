@@ -18,7 +18,7 @@
 #         output_schema=BuildProfilesOutput,
 #     )
 #     def build_respondent_profiles(flow, self, json):
-#         node_out = flow.get("retrieve_tables") or {}
+#         node_out = flow.get("retrieved_tables") or {}
 #         ...
 #         self.output.profiles = records
 #
@@ -142,7 +142,9 @@ def _extract_body(fn) -> str:
     # and a leading docstring are all dropped reliably.
     fn_node = ast.parse(src).body[0]
     if not isinstance(fn_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-        raise TypeError(f"@logic_block expects a function, got {type(fn_node).__name__}")
+        raise TypeError(
+            f"@logic_block expects a function, got {type(fn_node).__name__}"
+        )
 
     body = fn_node.body
     if (

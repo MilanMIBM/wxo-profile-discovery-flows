@@ -2,26 +2,26 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_details.schema.json",
   "title": "quiz_details",
-  "description": "One row per answered question within a submission: the per-answer detail. Source table data/tables/quiz_details.csv. Feeds the `submission_details.json` records; joins to scoring.csv on (quizId, submission_id) and to quiz_structure.csv on (quizId, question_number).",
+  "description": "One row per answered question within a submission: the per-answer detail. Source table data/tables/quiz_details.csv. Feeds the `submission_details.json` records; joins to scoring.csv on (quiz_id, submission_id) and to quiz_structure.csv on (quiz_id, question_number).",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "quizId",
-    "quiz_title",
+    "quiz_id",
+    "title",
     "submission_id",
-    "submittedAt",
+    "submitted_at",
     "question_number",
     "question",
     "answer",
     "correct"
   ],
   "properties": {
-    "quizId": {
-      "description": "Quiz this answer belongs to. Foreign key to quiz_meta.quizId / quiz_structure.quizId.",
+    "quiz_id": {
+      "description": "Quiz this answer belongs to. Foreign key to quiz_meta.quiz_id / quiz_structure.quiz_id.",
       "type": "string",
       "format": "uuid"
     },
-    "quiz_title": {
+    "title": {
       "description": "Denormalized quiz title, mirrors quiz_meta.title.",
       "type": "string",
       "minLength": 1
@@ -31,13 +31,13 @@
       "type": "string",
       "format": "uuid"
     },
-    "submittedAt": {
-      "description": "Submission timestamp, ISO-8601 UTC. Matches scoring.submittedAt for the same submission_id.",
+    "submitted_at": {
+      "description": "Submission timestamp, ISO-8601 UTC. Matches scoring.submitted_at for the same submission_id.",
       "type": "string",
       "format": "date-time"
     },
     "question_number": {
-      "description": "1-based position of the question within the quiz. Foreign key to quiz_structure.question_number for this quizId.",
+      "description": "1-based position of the question within the quiz. Foreign key to quiz_structure.question_number for this quiz_id.",
       "type": "integer",
       "minimum": 1
     },

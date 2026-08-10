@@ -15,7 +15,7 @@ with app.setup:
     import os
 
     from pathlib import Path
-    from typing import List, Dict
+    from typing import List, Dict, Any
     from pydantic import BaseModel, Field
     from pymongo import MongoClient
     from dotenv import load_dotenv
@@ -27,27 +27,20 @@ with app.setup:
     from src.helpers.logic_block import logic_block
 
     class BrandFanOutput(BaseModel):
-        """Outputs of the likely_long_term_brand_fan script node — all optional."""
+        """Outputs of the likely_long_term_brand_fan script node - all optional."""
 
-        respondent_id: str = Field(
-            default="", description="Id of the respondent."
-        )
-        respondent_behavioral_metatags: List[str] = Field(
+        respondent_id: str = Field(default="", description="Id of the respondent.")
+        likely_long_term_brand_fan: List[dict] = Field(
             default_factory=list,
-            description='["likely_long_term_brand_fan"] when the respondent qualifies, else [].',
+            description="""One entry per qualifying brand, keyed by brand name: [{"Acme": {"average_success_rate": 85.0, "total_completed_quizzes": 2, "prizes_played_for": ["Tickets"]}}]. Empty when no brand qualifies.""",
         )
-        respondent_id_obj: dict = Field(
-            default_factory=dict, description='{"respondent_id": ...}'
-        )
-        respondent_behavioral_metatags_obj: dict = Field(
+        likely_long_term_brand_fan_obj: dict = Field(
             default_factory=dict,
-            description='{"respondent_behavioral_metatags": [...]}',
+            description="""{"likely_long_term_brand_fan": [...]}""",
         )
         result: dict = Field(
-            default_factory=dict, description="Both fields together, as a dict."
-        )
-        result_json: str = Field(
-            default="", description="Both fields together, as a JSON string."
+            default_factory=dict,
+            description="""All fields together, as a dict.""",
         )
         preview_inputs: dict = Field(
             default_factory=dict,
@@ -103,7 +96,7 @@ def _():
     return (rewrite_tables,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(postgresql_engine, rewrite_tables):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
@@ -129,9 +122,7 @@ def _(postgresql_engine, rewrite_tables):
         if name in existing and rewrite_tables:
             print(f"{name}: dropping existing table")
             with postgresql_engine.connect() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         # Always recreate the table, even if it already exists
@@ -155,25 +146,43 @@ def _(postgresql_engine, rewrite_tables):
 @app.cell
 def _():
     retrieve_number = mo.ui.number(
-        label="**Control number of records to retrieve:**",
+        label="**Control number of records to retrieve :**",
         start=0,
         stop=1000,
         step=1,
-        value=50,
+        value=3,
     )
-    retrieve_number
+    # retrieve_number
     return (retrieve_number,)
 
 
+@app.cell
+def _(retrieve_number, select_account):
+    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
+    return (filter_stack,)
+
+
 @app.cell(hide_code=True)
-def _(postgresql_engine, retrieve_number):
-    quiz_meta = mo.sql(
-        f"""
-        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
-        """,
-        output=False,
-        engine=postgresql_engine,
-    )
+def _(postgresql_engine, retrieve_number, select_account):
+    if select_account.value:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            WHERE "account_id" = '{select_account.value}'
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
+    else:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
     return (quiz_meta,)
 
 
@@ -182,7 +191,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
         SELECT * FROM "quiz_structure"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -196,7 +205,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
         SELECT * FROM "quiz_details" 
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -210,7 +219,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
         SELECT * FROM "quiz_scoring"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -231,12 +240,24 @@ def _():
 def _(postgresql_engine):
     quiz_ids_unique = mo.sql(
         f"""
-        SELECT DISTINCT "quizId" FROM "quiz_structure"
+        SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
         engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
+
+
+@app.cell
+def _(postgresql_engine):
+    account_ids_unique = mo.sql(
+        f"""
+        SELECT DISTINCT "account_id" FROM "quiz_meta"
+        """,
+        output=False,
+        engine=postgresql_engine,
+    )
+    return (account_ids_unique,)
 
 
 @app.cell(hide_code=True)
@@ -252,10 +273,22 @@ def _(postgresql_engine):
 
 
 @app.cell
+def _(account_ids_unique):
+    account_id_list = account_ids_unique.account_id.to_list()
+    select_account = mo.ui.dropdown(
+        label="**Select account to filter by :**",
+        options=account_id_list,
+        # value=account_id_list[0],
+    )
+    # select_account
+    return (select_account,)
+
+
+@app.cell
 def _(user_emails):
     user_emails_list = user_emails.email.to_list()
     select_user = mo.ui.dropdown(
-        label="**Select user email:**",
+        label="**Select user email :**",
         options=user_emails_list,
         value=user_emails_list[0],
     )
@@ -265,30 +298,26 @@ def _(user_emails):
 
 @app.cell
 def _(quiz_ids_unique):
-    quiz_id_list = quiz_ids_unique.quizId.to_list()
+    quiz_id_list = quiz_ids_unique.quiz_id.to_list()
     select_quiz_id = mo.ui.dropdown(
-        label="**Select Quiz ID:**", options=quiz_id_list, value=quiz_id_list[0]
+        label="**Select Quiz ID :**", options=quiz_id_list, value=quiz_id_list[0]
     )
     # select_quiz_id
     return
 
 
-@app.function
+@app.function(hide_code=True)
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = (
-        df.to_dicts()
-        if hasattr(df, "to_dicts")
-        else df.to_dict(orient="records")
-    )
+    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
     }
 
 
-@app.function
+@app.function(hide_code=True)
 def jsonable_row(row):
     """Convert a dataframe row mapping to a plain JSON-serialisable dict.
 
@@ -306,16 +335,10 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return (
-                None
-                if val != val or val in (float("inf"), float("-inf"))
-                else val
-            )
+            return None if val != val or val in (float("inf"), float("-inf")) else val
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(
-            val, (datetime.datetime, datetime.date, datetime.time)
-        ):
+        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -348,7 +371,7 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
-    test_flow = {"retrieve_tables": {"output": db_records}}
+    test_flow = {"retrieved_tables": db_records}
     return (test_flow,)
 
 
@@ -368,9 +391,7 @@ def _():
 
 @app.cell
 def _():
-    # Authored and locally tested in wxo_base_profile_node.py; imported here
-    # so there is exactly one definition of it. Needed only to produce the
-    # profiles this notebook's local test scores.
+    # Authored and locally tested in wxo_base_profile_node.py; imported here so there is exactly one definition of it. Needed only to produce the profiles this notebook's local test scores.
     from wxo_base_profile_node import (
         build_respondent_profiles,
         BuildProfilesOutput,
@@ -380,79 +401,78 @@ def _():
 
 
 @app.function
-# 🧩 Tag a respondent as a likely long-term brand fan.
-#
-# Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-# `self` and `parent` are injected, `json` and `datetime` are pre-bound (no
-# imports), and there is no return value -- output happens by assignment.
-#
-# Reads:  parent._current_item     -- this iteration's respondent profile,
-#                                     whose nested quizzes[].submissions[] are
-#                                     flattened here into submission rows and
-#                                     a {quizId: {"brand_name": ...}} context
-#         flow.input.window_months -- optional int (default 3)
-#         flow.input.min_quizzes   -- optional int (default 3)
-#         flow.input.success_pct   -- optional number (default 60)
-# Writes: self.output.respondent_id / .respondent_behavioral_metatags
-#         self.output.*_obj                (single-key dicts)
-#         self.output.result / .result_json (all fields)
-#
-# Declare in the flow only the outputs you consume -- assigning an undeclared
-# output is harmless, and a declared-but-unassigned output is just empty.
-#
-# One completion per distinct quizId at its EARLIEST submittedAt (that same
-# submission supplies its score); group distinct quizzes by brand; a brand
-# qualifies when some window_months*30-day window holds >= min_quizzes of its
-# quizzes AND their POOLED success rate exceeds success_pct.
 @logic_block(
     display_name="Likely long-term brand fan",
     output_schema=BrandFanOutput,
 )
 def likely_long_term_brand_fan(flow, self, parent, json, datetime):
-    """Emits the likely_long_term_brand_fan metatag when any single brand shows a dense, high-scoring run of distinct quiz completions inside one rolling window."""
-    # This node runs INSIDE the foreach, so its data comes from the current
-    # iteration's profile, not from flow.input -- flow.input is identical on
-    # every iteration and would tag all respondents the same.
-    # Cursor first: a data map targeting `self.input.input` never lands (the
-    # field name collides with the input container itself), so self["input"]
-    # arrived {}. The mapped fallback keeps working if a named field is wired.
-    profile = dict(parent._current_item or {}) or (self["input"] or {}).get(
-        "profile"
-    ) or {}
+    """Reports which brands a respondent is a likely long-term fan of, with the stats behind each verdict.
 
-    # build_respondent_profiles emits a nested profile (quizzes[].submissions[])
-    # carrying brand_name per quiz; flatten it into the submission rows this
-    # block scores plus the {quizId: {"brand_name": ...}} context it groups by.
+    Runs in the flow engine's restricted sandbox, NOT as a normal module:
+    `flow`, `self` and `parent` are injected, `json` and `datetime` are
+    pre-bound (no imports), and there is no return value -- output happens by
+    assignment.
+
+    Reads:  parent._current_item -- this iteration's respondent profile, whose
+                                    nested quizzes[].submissions[] are flattened
+                                    into submission rows plus a per-quiz context
+                                    carrying brand_name and prize.prize_name
+            flow.input.likely_long_term_brand_fan_criteria
+                .window_days -- optional int (default 30) - 1 month
+                .min_quizzes -- optional int (default 2)
+                .success_pct -- optional number (default 60)
+    Writes: self.output.respondent_id
+            self.output.likely_long_term_brand_fan -- per-brand detail list
+            self.output.*_obj   (single-key dicts)
+            self.output.result  (all fields)
+
+    One completion per distinct quiz_id at its EARLIEST submitted_at (that same
+    submission supplies its score); group distinct quizzes by brand; a brand
+    qualifies when some window_days window holds >= min_quizzes of its quizzes
+    AND their POOLED success rate exceeds success_pct.
+
+    EVERY brand is evaluated, and the reported stats describe the brand as a
+    whole -- all its distinct completed quizzes -- not just the window that
+    happened to trigger qualification."""
+    profile = dict(parent._current_item or {}) or {}
+
+    # Flatten the nested profile into submission rows plus per-quiz context.
+    # prize_name lives one level in, at quiz["prize"]["prize_name"].
     rows = []
     ctx = {}
     for q in profile.get("quizzes") or []:
         qid = q.get("quiz_id")
         if qid is None:
             continue
-        ctx[qid] = {"brand_name": q.get("brand_name")}
+        prize = q.get("prize") or {}
+        ctx[qid] = {
+            "brand_name": q.get("brand_name"),
+            "prize_name": prize.get("prize_name"),
+        }
         for s in q.get("submissions") or []:
             correct = int(s.get("correct") or 0)
             incorrect = int(s.get("incorrect") or 0)
             rows.append(
                 {
-                    "quizId": qid,
-                    "submittedAt": s.get("submitted_at"),
-                    "correctAnswers": correct,
-                    # No explicit answered count on a submission; correct +
-                    # incorrect matches how the base profile derives accuracy.
-                    "totalAnswered": correct + incorrect,
+                    "quiz_id": qid,
+                    "submitted_at": s.get("submitted_at"),
+                    "correct_answers": correct,
+                    "total_answered": correct + incorrect,
                     "_id": s.get("submission_id"),
                 }
             )
 
     identifier = profile.get("respondent_id")
-    window_days = int(flow["input"].get("window_months") or 3) * 30
-    min_quizzes = int(flow["input"].get("min_quizzes") or 3)
-    success_pct = float(flow["input"].get("success_pct") or 60)
 
-    # ISO date string -> integer day count, so date gaps become plain
-    # subtraction. Only the leading YYYY-MM-DD is read, so full timestamps
-    # work too. None when unparseable.
+    # Flow input variables to adjust the behavior of the node at runtime.
+    criteria = flow.input.get("likely_long_term_brand_fan_criteria") or {}
+
+    window_days = int(criteria.get("window_days") or 30)
+    min_quizzes = int(criteria.get("min_quizzes") or 2)
+    success_pct = float(criteria.get("success_pct") or 60)
+
+    # ISO date -> integer day count, so date gaps become plain subtraction.
+    # Only the leading YYYY-MM-DD is read, so full timestamps work too.
     def epoch_day(value):
         if not value:
             return None
@@ -461,11 +481,9 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         except ValueError:
             return None
 
-    # Collapse many submissions to the EARLIEST one per distinct quizId,
-    # carrying the named `extra` fields (here the score) from that same row.
-    def earliest_completions(
-        rows, key="quizId", date_field="submittedAt", extra=()
-    ):
+    # One completion per distinct quiz_id -- its earliest submission, carrying
+    # the named `extra` fields (here the score) from that same row.
+    def earliest_completions(rows, key="quiz_id", date_field="submitted_at", extra=()):
         out = {}
         for row in rows:
             key_val = row.get(key)
@@ -480,11 +498,9 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
                 out[key_val] = record
         return out
 
-    # Pooled success rate: 100 * sum(correct)/sum(answered). None when nothing
-    # was answered, so "no data" stays distinct from a real 0%.
-    def pooled_success_rate(
-        items, correct_field="correct", answered_field="answered"
-    ):
+    # 100 * sum(correct)/sum(answered). None when nothing was answered, so
+    # "no data" stays distinct from a real 0%.
+    def pooled_success_rate(items, correct_field="correct", answered_field="answered"):
         correct = sum(int(i.get(correct_field) or 0) for i in items)
         answered = sum(int(i.get(answered_field) or 0) for i in items)
         if answered <= 0:
@@ -493,21 +509,21 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
 
     # Step 1: one completion per quiz, keeping its date + score.
     completions = earliest_completions(
-        rows, extra=["correctAnswers", "totalAnswered"]
+        rows, extra=["correct_answers", "total_answered"]
     )
 
-    # Step 2: per-quiz record (day, brand, correct, answered). `answered`
-    # falls back to `correct` when totalAnswered is absent.
+    # Step 2: per-quiz record (day, brand, prize, correct, answered).
+    # `answered` falls back to `correct` when total_answered is absent.
     quiz = {}
     for quiz_id, c in completions.items():
-        correct = int(c.get("correctAnswers") or 0)
-        answered_raw = c.get("totalAnswered")
-        answered = (
-            int(answered_raw) if answered_raw is not None else correct
-        )
+        correct = int(c.get("correct_answers") or 0)
+        answered_raw = c.get("total_answered")
+        answered = int(answered_raw) if answered_raw is not None else correct
+        meta = ctx.get(quiz_id) or {}
         quiz[quiz_id] = {
             "ord": c["epoch_day"],
-            "brand": ctx.get(quiz_id, {}).get("brand_name"),
+            "brand": meta.get("brand_name"),
+            "prize_name": meta.get("prize_name"),
             "correct": correct,
             "answered": answered,
         }
@@ -519,12 +535,13 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
             continue
         by_brand.setdefault(q["brand"], []).append(q)
 
-    # Step 4: does any brand qualify? Slide a window anchored at each quiz's
-    # date; a brand qualifies when a window holds >= min_quizzes AND their
-    # pooled success rate beats success_pct. Stop at the first such brand.
-    qualifies = False
-    for qs in by_brand.values():
+    # Step 4: evaluate EVERY brand and describe the ones that qualify. The
+    # window test only decides IF a brand qualifies; the reported stats then
+    # summarise all of that brand's distinct completed quizzes.
+    brands = []
+    for brand_name, qs in sorted(by_brand.items()):
         ords = [q["ord"] for q in qs]
+        qualifies = False
         for anchor in ords:
             win = [
                 q
@@ -536,34 +553,49 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
                 if rate is not None and rate > success_pct:
                     qualifies = True
                     break
-        if qualifies:
-            break
+        if not qualifies:
+            continue
 
-    # respondent_id = identifier if given, else the first row's _id, else None.
-    # metatags is always a list (possibly empty), never null.
-    metatags = ["likely_long_term_brand_fan"] if qualifies else []
+        # Prizes this respondent actually played for under this brand:
+        # de-duplicated, blanks dropped, first-seen order preserved.
+        prizes = []
+        for q in sorted(qs, key=lambda q: q["ord"]):
+            name = q.get("prize_name")
+            if name and name not in prizes:
+                prizes.append(name)
+
+        overall = pooled_success_rate(qs)
+        brands.append(
+            {
+                brand_name: {
+                    # Pooled across the brand's distinct quizzes, as a
+                    # percentage rounded to 2dp. None only if nothing answered.
+                    "average_success_rate": (
+                        round(overall, 2) if overall is not None else None
+                    ),
+                    "total_completed_quizzes": len(qs),
+                    "prizes_played_for": prizes,
+                }
+            }
+        )
+
+    # The flow's identifier wins; the first submission's id is the fallback.
     respondent_id = (
-        identifier
-        if identifier is not None
-        else (rows[0].get("_id") if rows else None)
+        identifier if identifier is not None else (rows[0].get("_id") if rows else None)
     )
     result = {
         "respondent_id": respondent_id,
-        "respondent_behavioral_metatags": metatags,
+        "likely_long_term_brand_fan": brands,
     }
 
-    # Three flavors per field: the raw value, the same value wrapped as a
-    # single-key dict, and result / result_json holding every field together.
+    # Each field is published three ways -- raw, wrapped as a single-key dict,
+    # and inside `result` -- so a data map can bind whichever shape it needs.
     self.output.respondent_id = respondent_id
-    self.output.respondent_behavioral_metatags = metatags
 
-    self.output.respondent_id_obj = {"respondent_id": respondent_id}
-    self.output.respondent_behavioral_metatags_obj = {
-        "respondent_behavioral_metatags": metatags
-    }
+    self.output.likely_long_term_brand_fan = brands
+    self.output.likely_long_term_brand_fan_obj = {"likely_long_term_brand_fan": brands}
 
     self.output.result = result
-    self.output.result_json = json.dumps(result)
     self.output.preview_inputs = profile
 
 
@@ -575,32 +607,55 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
-    class _Bag:
-        """Attribute bag standing in for the engine's `self.output` / `flow.private`."""
+    class _Bag(dict):
+        """Attribute bag standing in for the engine's `flow` / `self` / `parent`.
 
-        def __init__(self):
-            self.__dict__.update()
+        Subclasses dict and keeps both views in sync, because the engine's
+        namespaces are reachable BOTH ways and different blocks pick different
+        forms: `flow["input"]` and `flow.input`, `self.input.rows` and
+        `dict(self.input)`. Missing keys read back as an empty _Bag rather than
+        raising, so `flow.input.get("absent_criteria")` behaves like the engine's
+        (chained access on an unmapped field yields nothing, not AttributeError).
+        """
+
+        def __init__(self, data=None):
+            super().__init__(data or {})
+
+        def __getattr__(self, name):
+            if name.startswith("__"):
+                raise AttributeError(name)
+            return self.setdefault(name, _Bag())
+
+        def __setattr__(self, name, value):
+            self[name] = value
 
         def as_dict(self):
-            return dict(self.__dict__)
+            return {
+                k: v.as_dict() if isinstance(v, _Bag) else v for k, v in self.items()
+            }
 
-    class _FlowStub(dict):
-        """dict-like `flow` (flow.get / flow["input"]) that also carries .private."""
+    def _bag(data=None):
+        """Wrap nested mappings as _Bags so `flow.input.criteria.window_days` chains."""
+        if isinstance(data, dict):
+            return _Bag({k: _bag(v) for k, v in data.items()})
+        if isinstance(data, list):
+            return [_bag(v) for v in data]
+        return data
 
-        def __init__(self, data):
-            super().__init__(data)
-            self.private = _Bag()
+    def make_sandbox(flow_data, current_item=None, node_input=None):
+        flow = _bag(flow_data)
+        flow.private = _Bag()
 
-    def make_sandbox(flow_data, current_item=None):
         node = _Bag()
         node.output = _Bag()
-        # `parent` carries the foreach's current item for nodes inside the loop.
+        node.input = _bag(node_input or {})
+
         parent = _Bag()
         parent._current_item = current_item
         return {
-            "flow": _FlowStub(flow_data),
+            "flow": flow,
             "self": node,
             "parent": parent,
             "json": json,
@@ -611,27 +666,80 @@ def _():
 
 
 @app.cell
-def _(build_respondent_profiles, make_sandbox, run_tests, test_flow):
+def _():
+    test_window_days = mo.ui.number(
+        label="**Window days :**",
+        start=0,
+        stop=30,
+        step=1,
+        value=30,
+    )
+    return (test_window_days,)
+
+
+@app.cell
+def _():
+    test_min_quizzes = mo.ui.number(
+        label="**Minimum completed quizzes :**",
+        start=1,
+        stop=10,
+        step=1,
+        value=2,
+    )
+    return (test_min_quizzes,)
+
+
+@app.cell
+def _():
+    test_success_percentage = mo.ui.slider(
+        label="**Required success score :**",
+        start=0,
+        stop=100,
+        step=1,
+        value=55,
+        show_value=True,
+    )
+    return (test_success_percentage,)
+
+
+@app.cell
+def _(
+    build_respondent_profiles,
+    make_sandbox,
+    run_tests,
+    test_flow,
+    test_min_quizzes,
+    test_success_percentage,
+    test_window_days,
+):
     if run_tests.value:
         # Mirrors the real flow: build runs ONCE over the whole table bundle...
-        build_sandbox = make_sandbox(
-            {**test_flow, "input": {"identifier": None}}
-        )
+        build_sandbox = make_sandbox({"input": {"identifier": None, **test_flow}})
         build_respondent_profiles.run(**build_sandbox)
-        _profiles = build_sandbox["self"].output.profiles
+        _profiles = build_sandbox["self"].output.base_profiles
 
         # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each
         # iteration seeing its own profile via parent._current_item.
+        # The criteria the scorer reads off flow.input; {} would also work
+        # (every knob falls back to its default), this exercises the wiring.
+        _criteria = {
+            "likely_long_term_brand_fan_criteria": {
+                "window_days": int(test_window_days.value),
+                "min_quizzes": int(test_min_quizzes.value),
+                "success_pct": int(test_success_percentage.value),
+            }
+        }
+
         _fan = []
         for _profile in _profiles:
-            _sandbox = make_sandbox({**test_flow, "input": {}}, _profile)
+            _sandbox = make_sandbox({**test_flow, "input": _criteria}, _profile)
             likely_long_term_brand_fan.run(**_sandbox)
             _fan.append(_sandbox["self"].output.result)
 
         result = {
-            "profiles": _profiles,
-            "fan": _fan,
-            "private": build_sandbox["flow"].private.as_dict(),
+            "analysis": _fan,
+            "base_profiles": _profiles,
+            # "private": build_sandbox["flow"].private.as_dict(),
         }
     else:
         result = {}
@@ -639,8 +747,41 @@ def _(build_respondent_profiles, make_sandbox, run_tests, test_flow):
 
 
 @app.cell
+def _(test_min_quizzes, test_success_percentage, test_window_days):
+    specific_test_stack = mo.vstack(
+        [test_window_days, test_min_quizzes, test_success_percentage],
+        align="start",
+    )
+    return (specific_test_stack,)
+
+
+@app.cell
+def _(result, run_tests):
+    num_profiles = len(result.get("base_profiles")) if run_tests.value else 0
+    return (num_profiles,)
+
+
+@app.cell
 def _(run_tests, select_user):
-    mo.hstack([select_user, run_tests], justify="space-around")
+    test_stack = mo.hstack([select_user, run_tests], justify="space-around")
+    return (test_stack,)
+
+
+@app.cell
+def _(specific_test_stack):
+    specific_test_stack
+    return
+
+
+@app.cell
+def _(filter_stack):
+    filter_stack
+    return
+
+
+@app.cell
+def _(test_stack):
+    test_stack
     return
 
 
@@ -653,7 +794,7 @@ def _(result, run_tests, select_user):
         next(
             (
                 i
-                for i, prof in enumerate(result.get("profiles") or [])
+                for i, prof in enumerate(result.get("base_profiles") or [])
                 if prof.get("identity", {}).get("email") == select_user.value
             ),
             None,
@@ -663,15 +804,15 @@ def _(result, run_tests, select_user):
     )
 
     {
-        "profile": result.get("profiles")[_selected_index],
-        "fan": result.get("fan")[_selected_index],
+        # "profile": result.get("base_profiles")[_selected_index],
+        "analysis": result.get("analysis")[_selected_index],
     } if run_tests.value and _selected_index is not None else None
     return
 
 
 @app.cell
-def _(result):
-    mo.accordion({"Full Results List": result})
+def _(num_profiles, result):
+    mo.accordion({f"Full Results List (**Profile count: {num_profiles}**)": result})
     return
 
 

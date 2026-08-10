@@ -103,7 +103,26 @@ def _():
     return (rewrite_tables,)
 
 
-@app.cell
+@app.function(hide_code=True)
+def value_select_mapping(df, key_col, value_col):
+    """Build a {key_col value: value_col value} dict from a dataframe.
+
+    Args:
+        df: A pandas or polars dataframe.
+        key_col: Name of the column whose values become dict keys.
+        value_col: Name of the column whose values become dict values.
+
+    Returns:
+        dict mapping each row's key_col value to its value_col value.
+    """
+    if hasattr(df, "to_dicts"):
+        rows = df.to_dicts()
+    else:
+        rows = df.to_dict(orient="records")
+    return {row[key_col]: row[value_col] for row in rows}
+
+
+@app.cell(hide_code=True)
 def _(postgresql_engine, rewrite_tables):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
@@ -159,21 +178,42 @@ def _():
         start=0,
         stop=1000,
         step=1,
-        value=2,
+        value=3,
     )
-    retrieve_number
+    # retrieve_number
     return (retrieve_number,)
 
 
-@app.cell(hide_code=True)
-def _(postgresql_engine, retrieve_number):
-    quiz_meta = mo.sql(
-        f"""
-        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
-        """,
-        output=False,
-        engine=postgresql_engine,
+@app.cell
+def _(retrieve_number, select_account):
+    filter_stack = mo.hstack(
+        [select_account, retrieve_number], justify="space-around"
     )
+    # filter_stack
+    return (filter_stack,)
+
+
+@app.cell(hide_code=True)
+def _(postgresql_engine, retrieve_number, select_account):
+    if select_account.value:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            WHERE "account_id" = '{select_account.value}'
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
+    else:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
     return (quiz_meta,)
 
 
@@ -182,7 +222,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
         SELECT * FROM "quiz_structure"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -196,7 +236,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
         SELECT * FROM "quiz_details" 
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -210,7 +250,7 @@ def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
         SELECT * FROM "quiz_scoring"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
@@ -231,12 +271,24 @@ def _():
 def _(postgresql_engine):
     quiz_ids_unique = mo.sql(
         f"""
-        SELECT DISTINCT "quizId" FROM "quiz_structure"
+        SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
         engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
+
+
+@app.cell(hide_code=True)
+def _(postgresql_engine):
+    account_ids_unique = mo.sql(
+        f"""
+        SELECT DISTINCT "account_id" FROM "quiz_meta"
+        """,
+        output=False,
+        engine=postgresql_engine,
+    )
+    return (account_ids_unique,)
 
 
 @app.cell(hide_code=True)
@@ -264,8 +316,20 @@ def _(user_emails):
 
 
 @app.cell
+def _(account_ids_unique):
+    account_id_list = account_ids_unique.account_id.to_list()
+    select_account = mo.ui.dropdown(
+        label="**Select account to filter by:**",
+        options=account_id_list,
+        # value=account_id_list[0],
+    )
+    # select_account
+    return (select_account,)
+
+
+@app.cell
 def _(quiz_ids_unique):
-    quiz_id_list = quiz_ids_unique.quizId.to_list()
+    quiz_id_list = quiz_ids_unique.quiz_id.to_list()
     select_quiz_id = mo.ui.dropdown(
         label="**Select Quiz ID:**", options=quiz_id_list, value=quiz_id_list[0]
     )
@@ -273,7 +337,7 @@ def _(quiz_ids_unique):
     return
 
 
-@app.function
+@app.function(hide_code=True)
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
@@ -288,7 +352,7 @@ def as_table_entry(name, df):
     }
 
 
-@app.function
+@app.function(hide_code=True)
 def jsonable_row(row):
     """Convert a dataframe row mapping to a plain JSON-serialisable dict.
 
@@ -348,7 +412,7 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
-    test_flow = {"retrieve_tables": {"output": db_records}}
+    test_flow = {"retrieved_tables": db_records}
     return (test_flow,)
 
 
@@ -361,92 +425,6 @@ def _():
 @app.cell(column=1, hide_code=True)
 def _():
     mo.md(r"""
-    ### Class definitions
-    """)
-    return
-
-
-@app.class_definition
-class RespondentProfileItem(BaseModel):
-    """One respondent profile as iterated by the foreach.
-
-    EVERY field the downstream nodes read must be declared here. `extra="allow"`
-    is not enough: the engine validates each item against this schema and drops
-    whatever it does not declare, so an undeclared field arrives empty at
-    `parent._current_item` even though build_respondent_profiles emitted it.
-
-    Both scorers walk `quizzes[].submissions[]`, so `quizzes` has to be declared
-    -- without it every respondent scores off an empty list. The nested levels
-    stay untyped (`List[dict]`) so the whole quiz/submission/answer structure
-    rides through without being spelled out.
-    """
-
-    model_config = {"extra": "allow"}
-
-    respondent_id: str = Field(
-        default="",
-        description="Id of the respondent.",
-    )
-    context_record_id: str = Field(
-        default="",
-        description="Identifier supplied by the flow input, else the respondent id.",
-    )
-    identity: Any = Field(
-        default=None,
-        description="Display name, email and the anonymous / owner flags.",
-    )
-    quizzes: List = Field(
-        default_factory=list,
-        description="One entry per distinct quiz, each nesting its submissions and answers.",
-    )
-    quizzes_num: int = Field(
-        default=0,
-        description="How many distinct quizzes the respondent completed.",
-    )
-
-
-@app.class_definition
-### Flow-level private state
-class PrizeFlowPrivate(BaseModel):
-    """Internal accumulator for the for_each loop.
-
-    The foreach node exposes no readable aggregate of its iterations: its
-    `output_schema` is deprecated and populates nothing, and mapping the loop's
-    output (whole or by leaf) into a downstream node yields empty. So each
-    iteration appends its own record to this flow-scoped list instead, and
-    build_prize_table reads the finished list after the loop.
-
-    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
-    node inside the subflow write somewhere a node outside it can read.
-    """
-
-    model_config = {"extra": "allow"}
-
-    base_profiles: Any = Field(
-        default_factory=None,
-        description="One record per completed iteration.",
-    )
-    enriched_profiles: Any = Field(
-        default_factory=None,
-        description="One record per completed enriched iteration.",
-    )
-
-
-@app.cell
-def _():
-    # ForeachRespondentsInput = create_model(
-    #     "ForeachRespondentsInput",
-    #     items=(
-    #         BuildProfilesOutput.model_fields["base_profiles"].annotation,
-    #         ...,
-    #     ),
-    # )
-    return
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
     ## Logic blocks
     """)
     return
@@ -454,9 +432,7 @@ def _():
 
 @app.cell
 def _():
-    # Every logic block is authored and locally tested in its own *_node.py
-    # notebook; imported here so there is exactly one definition of each and
-    # this notebook only wires them together.
+    # Every logic block is authored and locally tested in its own *_node.py notebook; imported here so there is exactly one definition of each and this notebook only wires them together.
     from wxo_base_profile_node import (
         build_respondent_profiles,
         BuildProfilesOutput,
@@ -480,6 +456,78 @@ def _():
 
 
 @app.class_definition
+class RespondentProfileItem(BaseModel):
+    """One respondent profile as iterated by the foreach.
+
+    EVERY field the downstream nodes read must be declared here. `extra="allow"`
+    is not enough: the engine validates each item against this schema and drops
+    whatever it does not declare, so an undeclared field arrives empty at
+    `parent._current_item` even though build_respondent_profiles emitted it.
+
+    Both scorers walk `quizzes[].submissions[]`, so `quizzes` has to be declared
+    -- without it every respondent scores off an empty list. The nested levels
+    stay untyped (`List[dict]`) so the whole quiz/submission/answer structure
+    rides through without being spelled out.
+    """
+
+    model_config = {"extra": "allow"}
+
+    respondent_id: str = Field(
+        default="",
+        description="Id of the respondent.",
+    )
+    account_id: str = Field(
+        default="",
+        description="Id of the account that the respondent belongs to.",
+    )
+    context_record_id: str = Field(
+        default="",
+        description="Identifier supplied by the flow input, else the respondent id.",
+    )
+    identity: Any = Field(
+        default=None,
+        description="Display name, email and the anonymous / owner flags.",
+    )
+    quizzes: List = Field(
+        default_factory=list,
+        description="One entry per distinct quiz, each nesting its submissions and answers.",
+    )
+    quizzes_num: int = Field(
+        default=0,
+        description="How many distinct quizzes the respondent completed.",
+    )
+    analysis: Any = Field(
+        default=None,
+        description="Results of the scorer nodes",
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
+
+
+@app.cell
+def _():
+    @logic_block(
+        display_name="Stage profile inputs", output_schema=CurrentProfileOutput
+    )
+    def stage_profile_inputs(flow, self, parent, json):
+        """Publishes this iteration's respondent profile as a node output so the scorers downstream have a named handle to map from.
+
+        Reads:  parent._current_item -- the profile for this iteration
+        Writes: self.output.profile"""
+        current_profile = dict(parent._current_item) or {}
+
+        self.output.profile = current_profile
+
+    return (stage_profile_inputs,)
+
+
+@app.class_definition
 class CurrentProfileOutput(BaseModel):
     """Output for the stage_profile_inputs node."""
 
@@ -489,87 +537,54 @@ class CurrentProfileOutput(BaseModel):
     )
 
 
-@app.function
-@logic_block(
-    display_name="Stage prize inputs", output_schema=CurrentProfileOutput
-)
-def stage_profile_inputs(flow, self, parent, json):
-    """Turns the current prize record into the url list the fetch tool consumes and the baseline prize fields the tag-generation prompt consumes."""
-    current_profile = dict(parent._current_item) or self["input"] or {}
-
-    self.output.profile = current_profile
-
-
-@app.class_definition
-class MergeProfileInputs(BaseModel):
-    """Inputs of the merge_profile_signals script node.
-
-    `Any`, NOT `dict`, even though both carry a dict at runtime. A dict-typed
-    field compiles to `type: object`, which the ADK promotes into a global
-    schema named after the field -- and pydantic titles `brand_fan` as
-    "Brand Fan", producing `$ref: #/schemas/Brand Fan`. That reference does not
-    resolve, so the whole input schema came back empty ("No inputs defined" in
-    the run trace) and both data maps had nowhere to land. `Any` compiles to a
-    bare `{}` property: no promotion, no ref, no space in a name.
-
-    ONE FIELD PER SCORER, NAMED AFTER THE SCORER NODE. merge copies each field
-    straight into `analysis` under its own key, so the field name IS the key the
-    enriched profile ends up carrying -- no lookup table, no name mapping in the
-    body. Adding a scorer means one field here plus one map_input in the flow."""
-
-    sustained_engagement_level: Any = Field(
-        default=None,
-        description="The `result` dict emitted by the sustained_engagement_level script node: respondent_id plus the sustained_engagement_level bracket that qualified.",
-    )
-    likely_long_term_brand_fan: Any = Field(
-        default=None,
-        description="The `result` dict emitted by the likely_long_term_brand_fan script node: respondent_id plus the respondent_behavioral_metatags list.",
-    )
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
 
 
 @app.cell
 def _():
-    # 🧩 Nest every scorer's result under one `analysis` key on the profile.
-    #
-    # Node-name agnostic: walks self.input rather than naming any scorer, and
-    # each input field is named after the node that feeds it, so the field name
-    # becomes the analysis key with no lookup table here. Adding a scorer needs
-    # a field on MergeProfileInputs and a map_input in the flow, nothing here.
-    #
-    # Reads:  parent._current_item -- the profile for this iteration
-    #         self.input.<scorer>  -- that scorer's `result` dict
-    # Writes: self.output.enriched_profile   -- profile + analysis
-    #         self.output.preview_inputs     -- raw signal bag, for debugging
-    #         flow.private.enriched_profiles -- one record per iteration
     @logic_block(
         display_name="Merge profile signals",
-        input_schema=MergeProfileInputs,
         output_schema=MergeProfileOutput,
     )
     def merge_profile_signals(flow, self, parent, json):
-        """Copies the current respondent profile and attaches an `analysis` block holding one entry per upstream scorer, keyed by the scorer's name and carrying that scorer's result."""
-        # Seed a NEW record from the loop cursor, NOT from self["input"]: the
-        # input bag holds only the mapped-in signals, so seeding from it built a
-        # record of scorer output with the respondent's own fields missing.
-        # dict() copies, so the cursor itself is never mutated.
-        enriched_profile = dict(parent._current_item or {})
-        # sus = flow.sustained_engagement_level.output
-        # fan = flow.likely_long_term_brand_fan.output
-        sus_p = parent.sustained_engagement_level.output.result
-        fan_p = parent.likely_long_term_brand_fan.output.result
-        inp = {"sus_p": sus_p, "fan_p": fan_p}
+        """Copies the current respondent profile and attaches an `analysis` block holding one entry per upstream scorer, keyed by the scorer's name and carrying that scorer's result.
 
-        # One entry per mapped-in scorer, keyed by the input field name -- which
-        # is the scorer node's own name, so the key needs no translation.
-        inputs = dict(self.input or {})
+        Reads:  parent._current_item -- the profile for this iteration
+                self.input.<scorer>  -- that scorer's `result` dict
+        Writes: self.output.enriched_profile -- profile + analysis
+                self.output.preview_inputs   -- raw signal bag, for debugging
+
+        Node-name agnostic: walks self.input rather than naming any scorer, and
+        each input field is named after the node that feeds it, so the field
+        name becomes the analysis key with no lookup table here. Adding a
+        scorer needs a field on MergeProfileInputs and a map_input in the flow,
+        nothing in this body."""
+
+        enriched_profile = dict(
+            parent.stage_profile_inputs.output.profile or {}
+        )
+
+        ### Ay additional scorer nodes added should be appended into scorers
+        scorers = {
+            "sustained_engagement_level": (
+                parent.sustained_engagement_level.output.result or {}
+            ),
+            "likely_long_term_brand_fan": (
+                parent.likely_long_term_brand_fan.output.result or {}
+            ),
+        }
+        inputs = dict(scorers or {})
+        ### ---------------------------------------------------------------
 
         analysis = {}
         for scorer_name, result in inputs.items():
             if result is None:
                 continue
-            # Each scorer is mapped in as its `result` dict. If a whole node
-            # output ever arrives instead, unwrap the `result` it carries so the
-            # analysis entry stays the result either way.
             if isinstance(result, dict) and isinstance(
                 result.get("result"), dict
             ):
@@ -579,10 +594,13 @@ def _():
         enriched_profile["analysis"] = analysis
 
         self.output.enriched_profile = enriched_profile
-        # The raw signal bag: {} here means the scorer maps did not land, so a
-        # run tells you whether to look at the wiring or at the scoring logic.
         self.output.preview_inputs = inputs
-        self.output.parentz = inp
+
+        # The foreach exposes no readable aggregate of its iterations, so each
+        # iteration appends its own record to the flow-scoped list that
+        # build_profile_table reads once the loop is done.
+        collected = flow["private"].get("enriched_profiles") or []
+        flow.private.enriched_profiles = collected + [enriched_profile]
 
     return (merge_profile_signals,)
 
@@ -603,9 +621,124 @@ class MergeProfileOutput(BaseModel):
         default_factory=None,
         description="Preview inputs from the flow for debugging purposes",
     )
-    parentz: Any = Field(
-        default_factory=None,
-        description="Parentz preview",
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
+
+
+@app.cell
+def _():
+    @logic_block(
+        display_name="Build profile table",
+        output_schema=ProfileTableOutputs,
+    )
+    def build_profile_table(flow, self, parent, json, each):
+        """Turns the loop's enriched profile records into a table, decomposing `analysis` and `identity` one level into dot-notation columns.
+
+        Runs ONCE, after the foreach -- it reads the whole accumulated list, not a
+        single item, so it sits outside the loop where `parent._current_item` is
+        meaningless.
+
+        Reads:  parent.<for_each_flow_name>.<last_node_name>.output -- the for_each's aggregated per-iteration outputs
+        Writes: self.output.rows      -- one row per respondent
+                self.output.row_count -- how many rows were produced
+                self.output.enriched_profiles -- the records as they arrived
+
+        Nothing is dropped: every key on the record survives into the row. Only
+        `analysis` and `identity` are decomposed, one level, into
+        `analysis.<scorer>` / `identity.<field>` columns -- pandas would
+        otherwise collapse each into a single object-dtype column. The
+        decomposition is generic (it walks whatever keys are present rather than
+        naming scorers) and stops at one level, so a scorer's own nested result
+        stays whole in its cell."""
+        inputs = (
+            {"rows": parent.each_respondent.merge_profile_signals.output}
+            if isinstance(
+                parent.each_respondent.merge_profile_signals.output, list
+            )
+            else (
+                parent.each_respondent.merge_profile_signals.output
+                if isinstance(
+                    parent.each_respondent.merge_profile_signals.output, dict
+                )
+                else {}
+            )
+        )
+        rows_in = inputs.get("rows")
+
+        # Tolerate the bare list and the {rows: [...]} / {items: [...]} wrappers.
+        if isinstance(rows_in, dict):
+            for key in ("rows", "items", "output", "result"):
+                if isinstance(rows_in.get(key), list):
+                    rows_in = rows_in[key]
+                    break
+        if not isinstance(rows_in, list):
+            rows_in = []
+
+        # The mapped input is the fallback, not the primary source: the foreach exposes no readable aggregate, so the records actually arrive via the flow-scoped list each iteration appended to.
+        if not rows_in:
+            collected = flow["private"].get("enriched_profiles")
+            if isinstance(collected, list):
+                rows_in = collected
+
+        DECOMPOSE = ("analysis", "identity")
+
+        rows_out = []
+        for entry in rows_in:
+            if not isinstance(entry, dict):
+                continue
+
+            row = {}
+            for key, value in entry.items():
+                # One level only: each child becomes `key.child`, and whatever
+                # the child holds is left exactly as it is.
+                if key in DECOMPOSE and isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        row[f"{key}.{sub_key}"] = sub_value
+                else:
+                    row[key] = value
+
+            rows_out.append(row)
+
+        self.output.rows = rows_out
+        self.output.row_count = len(rows_out)
+        self.output.enriched_profiles = rows_in
+        self.output.preview_inputs = inputs
+
+    return (build_profile_table,)
+
+
+@app.class_definition
+### build_profile_table - Output Schema
+class ProfileTableOutputs(BaseModel):
+    """Outputs of the build_profile_table script node.
+
+    `rows` is typed as plain dicts rather than RespondentProfileItem: the rows
+    carry the decomposed `analysis.<scorer>` / `identity.<field>` columns, which
+    the item schema does not declare, and the engine drops whatever the declared
+    schema does not name. `enriched_profiles` carries the same records with
+    nothing decomposed.
+    """
+
+    rows: List[dict] = Field(
+        default_factory=list,
+        description="One flat row per respondent, ready to load straight into a dataframe.",
+    )
+    row_count: int = Field(
+        default=0, description="How many respondent rows were produced."
+    )
+    enriched_profiles: List[dict] = Field(
+        default_factory=list,
+        description="The full nested profile documents, one per respondent, before flattening.",
+    )
+    preview_inputs: Any = Field(
+        default=None,
+        description="The inputs preview for debugging",
     )
 
 
@@ -625,81 +758,96 @@ def _():
     return
 
 
+@app.class_definition
+### Flow-level private state
+class ProfileFlowPrivate(BaseModel):
+    """Internal accumulator for the for_each loop.
+
+    The foreach node exposes no readable aggregate of its iterations: its
+    `output_schema` is deprecated and populates nothing, and mapping the loop's
+    output (whole or by leaf) into a downstream node yields empty. So each
+    iteration appends its own record to this flow-scoped list instead, and
+    build_profile_table reads the finished list after the loop.
+
+    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
+    node inside the subflow write somewhere a node outside it can read.
+    """
+
+    model_config = {"extra": "allow"}
+
+    base_profiles: Any = Field(
+        default_factory=None,
+        description="One record per completed iteration.",
+    )
+    enriched_profiles: List[dict] = Field(
+        default_factory=list,
+        description="The full nested profile documents, one per respondent, before flattening.",
+    )
+
+
+@app.class_definition
+### Flow-level Output Schema
+class ProfileFlowOutput(BaseModel):
+    """Final output of the respondent_profile_enrichment flow.
+
+    `rows` is a flat list of one dict per profile, every value a scalar, so
+    `pd.DataFrame(result["rows"])` yields a table directly with no further
+    unnesting. Typed as `dict` for the same reason as ProfileTableOutputs.rows:
+    RespondentProfileItem describes the nested loop item, not this flat row, and
+    the engine drops whatever the declared schema does not name.
+    """
+
+    rows: List[dict] = Field(
+        default_factory=list,
+        description="One flat row per profile, ready to load straight into a dataframe.",
+    )
+    row_count: int = Field(
+        default=0, description="How many profile rows were produced."
+    )
+    enriched_profiles: List[dict] = Field(
+        default_factory=list,
+        description="The full nested profile documents, one per respondent, before flattening.",
+    )
+
+
 @app.cell
 def _(
     BrandFanOutput,
     SustainedEngagementOutput,
+    build_profile_table,
     build_respondent_profiles,
     display_name,
     flow_name,
     likely_long_term_brand_fan,
     merge_profile_signals,
+    stage_profile_inputs,
     sustained_engagement_level,
 ):
     @flow(
         name=flow_name,
         display_name=display_name,
-        output_schema=PrizeFlowPrivate,
-        private_schema=PrizeFlowPrivate,
+        output_schema=ProfileFlowOutput,
+        private_schema=ProfileFlowPrivate,
         description=(
-            "Builds one profile per quiz respondent from the raw quiz tables, then scores "
-            "each respondent's sustained engagement level and long-term brand affinity "
-            "concurrently, returning the profiles enriched with both signals."
+            """Builds one profile per quiz respondent from the raw quiz tables, then scores each respondent's sustained engagement level and long-term brand affinity concurrently, returning the profiles enriched with both signals."""
         ),
     )
     def build_respondent_profile_enrichment_flow(aflow: Flow) -> Flow:
-        # Collapses the table bundle into one record per respondent. Runs ONCE,
-        # before the loop -- it reads whole tables and emits the list to iterate.
-        #
-        # output_schema is explicit: without it, Flow.script() infers one from
-        # the script body and always types every self.output.X field as a bare
-        # string, which mistypes `profiles` (an array of profile objects) and
-        # breaks the foreach's `items` mapping downstream.
+
         build_profiles = build_respondent_profiles(aflow)
 
-        # One iteration per respondent; PARALLEL since respondents are independent.
-        #
-        # NO explicit input_schema: the ADK auto-generates one that marks
-        # `items` REQUIRED (flow.py foreach(), the `required=["items"]` branch).
-        # A hand-written model whose `items` field carries a default makes the
-        # field optional instead, and the engine then stops treating `items` as
-        # the loop source -- it scans the payload and picks up the flow-input
-        # passthrough (`output`, the raw table bundles) instead, failing with
-        # "Cannot determine the items to loop" even though `items` was
-        # correctly populated with every profile.
         each: Flow = aflow.foreach(
             item_schema=RespondentProfileItem,
-            # input_schema=BuildProfilesOutput,
             name="each_respondent",
             display_name="Create Profile For Each Respondent",
+            # ).policy(kind=ForeachPolicy.SEQUENTIAL)
         ).policy(kind=ForeachPolicy.PARALLEL)
 
-        # REQUIRED: sequencing build_profiles -> each only orders execution, it
-        # does not map build_profiles's output.profiles onto the "items" field.
-        # Without this map the foreach never receives anything to iterate and
-        # nothing downstream runs.
-        #
-        # `flow.`, not `parent.` or `self.`: input-map expressions address a
-        # sibling node's output as `flow.<nodeName>.output.<field>` (the root
-        # the ADK's own mapping helper and the official datamap example use).
-        # `parent` only reaches the enclosing scope from inside a subflow --
-        # at top level it resolves to nothing, the required "items" input
-        # stays empty, and the flow dies right here after the first node.
         each.map_input(
             "items",
-            f"flow.private.base_profiles",
-        )  # we have to add .data to .output in this case as we are nesting several flows within each other.
+            f"parent.{build_profiles.spec.name}.output.base_profiles",
+        )
 
-        # Both scorers are plain nodes of the foreach body -- NO nested parallel.
-        # The foreach itself already runs PARALLEL across respondents, and the
-        # extra parallel subflow only added a scope boundary that explicit input
-        # maps could not cross. Inside one iteration the two scorers run back to
-        # back off the same `_current_item`, which is cheap: both are script
-        # nodes over a single respondent's data.
-        # NO input maps on these three: all of them read parent._current_item
-        # directly, the way the prize flow's stage node does. The maps that used
-        # to be here moved a whole dict (stage's `profile`) into a field called
-        # `input`, and neither half of that works -- see the merge comment below.
         stage = stage_profile_inputs(each, output_schema=CurrentProfileOutput)
 
         engagement = sustained_engagement_level(
@@ -710,36 +858,11 @@ def _(
             each, output_schema=BrandFanOutput
         )
 
-        # Adds both scorers' results onto this iteration's profile.
-        #
-        # EXPLICIT maps, not auto-mapping: declaring MergeProfileInputs alone
-        # left both fields empty. Auto-mapping is an import-time LLM binding and
-        # cannot be relied on; a data map from a declared source leaf into a
-        # declared target field is what actually lands (same shape as the prize
-        # flow's `tags` / `generated_description` maps).
-        #
-        # `result` is the leaf both scorers declare (SustainedEngagementOutput /
-        # BrandFanOutput) holding their fields as one dict -- merge flattens it
-        # one level onto the profile.
-        #
-        # output_schema is explicit here too -- same reason as build_respondent_profiles
-        # above: without it `profile` would be auto-typed as a bare string.
         merge = merge_profile_signals(
             each,
-            # input_schema=MergeProfileInputs,
             output_schema=MergeProfileOutput,
         )
 
-        # Target field == source node name, so merge can use the field name as
-        # the `analysis` key without knowing anything about either scorer.
-        merge.map_input(
-            "sustained_engagement_level",
-            f"parent.{engagement.spec.name}.output.result",
-        )
-        merge.map_input(
-            "likely_long_term_brand_fan",
-            f"parent.{brand_fan.spec.name}.output.result",
-        )
         each.sequence(
             START,
             stage,
@@ -749,19 +872,30 @@ def _(
             END,
         )
 
+        # Sits OUTSIDE the loop: it reads the whole accumulated list once, after
+        # every iteration has appended to flow.private.enriched_profiles.
+        table = build_profile_table(aflow, output_schema=ProfileTableOutputs)
+
         aflow.sequence(
             START,
             build_profiles,
             each,
+            table,
             END,
         )
+
+        # The flow returns the flat table: `pd.DataFrame(result["rows"])`.
         aflow.map_output(
-            "base_profiles",
-            f"flow.{each.spec.name}.output.base_profiles",
+            "rows",
+            f"flow.{table.spec.name}.output.rows",
+        )
+        aflow.map_output(
+            "row_count",
+            f"flow.{table.spec.name}.output.row_count",
         )
         aflow.map_output(
             "enriched_profiles",
-            f"flow.{each.spec.name}.output.enriched_profiles",
+            f"flow.{table.spec.name}.output.enriched_profiles",
         )
         return aflow
 
@@ -789,7 +923,7 @@ def _(flow_name):
     return (FLOW_SPEC_PATH,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(FLOW_SPEC_PATH):
     def import_flow_to_wxo(aflow, path=FLOW_SPEC_PATH, dry_run=False):
         """Compile the notebook's flow and import it into the active wxo environment.
@@ -851,7 +985,7 @@ def _(flow_import, import_flow_to_wxo, run_flow_import):
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    /// admonition | Test Deployed Flow
+    /// admonition | Import & Test Deployed Flow
     """)
     return
 
@@ -870,28 +1004,10 @@ def _(InferenceClient):
         provider="wxo",
         api_key=os.getenv("IBMCLOUD_APIKEY", ""),
         url=os.getenv("WXO_ENDPOINT", ""),
+        timeout=360,
     )
     flows_client
     return (flows_client,)
-
-
-@app.function
-def value_select_mapping(df, key_col, value_col):
-    """Build a {key_col value: value_col value} dict from a dataframe.
-
-    Args:
-        df: A pandas or polars dataframe.
-        key_col: Name of the column whose values become dict keys.
-        value_col: Name of the column whose values become dict values.
-
-    Returns:
-        dict mapping each row's key_col value to its value_col value.
-    """
-    if hasattr(df, "to_dicts"):
-        rows = df.to_dicts()
-    else:
-        rows = df.to_dict(orient="records")
-    return {row[key_col]: row[value_col] for row in rows}
 
 
 @app.cell
@@ -902,18 +1018,6 @@ def _(flows_client, run_flow_import):
         pd.DataFrame(flows_list), key_col="name", value_col="id"
     )
     return (flow_selection,)
-
-
-@app.cell
-def _(run_flow_import):
-    run_flow_import
-    return
-
-
-@app.cell
-def _(flow_import_result):
-    flow_import_result
-    return
 
 
 @app.cell
@@ -929,21 +1033,46 @@ def _(flow_name, flow_selection):
             )
         ),
     )
-    flow_selection_dropdown
     return (flow_selection_dropdown,)
 
 
 @app.cell
-def _(flow_selection_dropdown):
-    print(flow_selection_dropdown.value)
-    return
+def _(flow_run_test, flow_selection_dropdown):
+    test_stack = mo.hstack(
+        [flow_selection_dropdown, flow_run_test], justify="space-around"
+    )
+    return (test_stack,)
 
 
 @app.cell
 def _():
-    flow_run_test = mo.ui.run_button(label="Test Run Deployed Flow")
-    flow_run_test
+    flow_run_test = mo.ui.run_button(label="**Test Run Deployed Flow**")
+    # flow_run_test
     return (flow_run_test,)
+
+
+@app.cell
+def _(run_flow_import):
+    run_flow_import
+    return
+
+
+@app.cell
+def _(flow_import_result):
+    flow_import_result
+    return
+
+
+@app.cell
+def _(filter_stack):
+    filter_stack
+    return
+
+
+@app.cell
+def _(test_stack):
+    test_stack
+    return
 
 
 @app.cell
@@ -960,7 +1089,7 @@ def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
             flow_input=test_flow,
         )
     else:
-        flow_result = None
+        flow_result = {}
     return (flow_result,)
 
 
@@ -970,14 +1099,14 @@ def _(flow_result):
     return
 
 
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    /// attention | IMPORTANT!
-
-    Script nodes don't need or get input schemas/input mapping, it's amistake that needs fixing. They always directly relate to the `flow.input.<>` **/** `flow.node.output.<>` **/** `parent.node.output.<>` kind of specifications for their inputs and they can occur at any time. I need to fix it in the cleanup for all script nodes.
-    ///
-    """)
+@app.cell
+def _(flow_result):
+    flow_result_table = (
+        pd.DataFrame(flow_result.get("rows"))
+        if flow_result is not None
+        else pd.DataFrame({})
+    )
+    flow_result_table
     return
 
 

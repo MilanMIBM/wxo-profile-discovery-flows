@@ -1,7 +1,7 @@
-# Flow callbacks — `add_callback()`
+# Flow callbacks - `add_callback()`
 
 Invokes a tool when specified events occur during a flow run. Creates a `FlowCallback`,
-appends it to the flow spec, and returns `Self` — so calls chain.
+appends it to the flow spec, and returns `Self` - so calls chain.
 
 ```py
 from ibm_watsonx_orchestrate.flow_builder.flow_callback_types import FlowCallbackEventKind
@@ -18,31 +18,31 @@ aflow.add_callback(
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `tool` | `str` | yes | Tool identifier. Four accepted formats, below. |
-| `events` | `List[FlowCallbackEventKind]` | yes | Events that trigger the callback. |
-| `batch_interval` | `int` | no | Batching interval in **milliseconds**. Server default when omitted. |
+| Param            | Type                          | Req | Notes                                                               |
+| ---------------- | ----------------------------- | --- | ------------------------------------------------------------------- |
+| `tool`           | `str`                         | yes | Tool identifier. Four accepted formats, below.                      |
+| `events`         | `List[FlowCallbackEventKind]` | yes | Events that trigger the callback.                                   |
+| `batch_interval` | `int`                         | no  | Batching interval in **milliseconds**. Server default when omitted. |
 
 ## `tool` identifier formats
 
-| Format | Example |
-| --- | --- |
-| `tool_name` | `"flow_callback_handler"` |
-| `tool_name:tool_uuid` | `"error_handler:abc-123-def-456"` |
-| `toolkit:tool_name` | `"monitoring_toolkit:task_event_handler"` |
-| `toolkit:tool_name:tool_uuid` | `"audit_toolkit:audit_logger:xyz-789"` |
+| Format                        | Example                                   |
+| ----------------------------- | ----------------------------------------- |
+| `tool_name`                   | `"flow_callback_handler"`                 |
+| `tool_name:tool_uuid`         | `"error_handler:abc-123-def-456"`         |
+| `toolkit:tool_name`           | `"monitoring_toolkit:task_event_handler"` |
+| `toolkit:tool_name:tool_uuid` | `"audit_toolkit:audit_logger:xyz-789"`    |
 
 ## `FlowCallbackEventKind`
 
-| Event | Fires when | Batched? |
-| --- | --- | --- |
-| `ON_FLOW_START` | Flow starts. | Yes |
-| `ON_FLOW_END` | Flow completes. | Yes |
-| `ON_FLOW_ERROR` | Flow errors. | Yes |
-| `ON_TASK_MESSAGE` | Task emits a message. | **No** — invoked immediately. |
-| `ON_TASK_WAIT` | Task waits for user input. | **No** — invoked immediately. |
-| `ON_TASK_ERROR` | Task errors. | — |
+| Event             | Fires when                 | Batched?                      |
+| ----------------- | -------------------------- | ----------------------------- |
+| `ON_FLOW_START`   | Flow starts.               | Yes                           |
+| `ON_FLOW_END`     | Flow completes.            | Yes                           |
+| `ON_FLOW_ERROR`   | Flow errors.               | Yes                           |
+| `ON_TASK_MESSAGE` | Task emits a message.      | **No** - invoked immediately. |
+| `ON_TASK_WAIT`    | Task waits for user input. | **No** - invoked immediately. |
+| `ON_TASK_ERROR`   | Task errors.               | -                             |
 
 `batch_interval` applies only to the three `ON_FLOW_*` events. It is ignored for
 `ON_TASK_MESSAGE` and `ON_TASK_WAIT`.
@@ -59,7 +59,7 @@ OpenAPI, Python, Flow, MCP.
 **Prefer OpenAPI tools.** They give a clean, stateless callback interface with no user
 interaction to manage and no correlation-ID propagation.
 
-## Constraint — Flow tools as callbacks
+## Constraint - Flow tools as callbacks
 
 A Flow used as a callback tool **must not contain user activity nodes**.
 

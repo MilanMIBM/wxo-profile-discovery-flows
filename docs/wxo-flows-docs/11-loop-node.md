@@ -1,6 +1,6 @@
-# Loop node — `loop()`
+# Loop node - `loop()`
 
-A nested subflow that repeats **while** a condition holds — while-loop semantics. Returns a
+A nested subflow that repeats **while** a condition holds - while-loop semantics. Returns a
 `Flow`.
 
 ```py
@@ -9,11 +9,11 @@ while_loop: Flow = aflow.loop(evaluator=..., input_schema=..., output_schema=...
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `evaluator` | `str` | yes | Python expression. The subflow repeats while it evaluates true. |
-| `input_schema` | `BaseModel` | no | Input schema of the nested subflow. |
-| `output_schema` | `BaseModel` | no | Output schema of the nested subflow. |
+| Param           | Type        | Req | Notes                                                           |
+| --------------- | ----------- | --- | --------------------------------------------------------------- |
+| `evaluator`     | `str`       | yes | Python expression. The subflow repeats while it evaluates true. |
+| `input_schema`  | `BaseModel` | no  | Input schema of the nested subflow.                             |
+| `output_schema` | `BaseModel` | no  | Output schema of the nested subflow.                            |
 
 ## Call form
 
@@ -59,8 +59,8 @@ See [12-timer-node.md](12-timer-node.md).
 
 ## Versus foreach
 
-| | `loop()` | `foreach()` |
-| --- | --- | --- |
-| Repeats | While a condition is true | Once per item in a list |
-| Control | `evaluator` expression | `item_schema` + `policy()` |
-| Concurrency | Sequential | `SEQUENTIAL` or `PARALLEL` |
+|             | `loop()`                  | `foreach()`                |
+| ----------- | ------------------------- | -------------------------- |
+| Repeats     | While a condition is true | Once per item in a list    |
+| Control     | `evaluator` expression    | `item_schema` + `policy()` |
+| Concurrency | Sequential                | `SEQUENTIAL` or `PARALLEL` |

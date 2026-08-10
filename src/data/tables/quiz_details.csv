@@ -1,4 +1,4 @@
-"quizId","quiz_title","submission_id","submittedAt","question_number","question","answer","correct"
+"quiz_id","title","submission_id","submitted_at","question_number","question","answer","correct"
 "c1849e65-cc70-48e3-bdeb-ed2d62b7565f","Nike Run Club: Marathon Legends","1ead5aa0-135e-c365-dd5a-34e28385fd54","2026-06-20T09:00:00Z",1,"What is the standard distance of a marathon?","42.195 km",True
 "c1849e65-cc70-48e3-bdeb-ed2d62b7565f","Nike Run Club: Marathon Legends","1ead5aa0-135e-c365-dd5a-34e28385fd54","2026-06-20T09:00:00Z",2,"Who broke the 2-hour marathon barrier in an unofficial 2019 event?","Eliud Kipchoge",True
 "c1849e65-cc70-48e3-bdeb-ed2d62b7565f","Nike Run Club: Marathon Legends","1ead5aa0-135e-c365-dd5a-34e28385fd54","2026-06-20T09:00:00Z",3,"Which major marathon is held on Patriots' Day?","Boston Marathon",True

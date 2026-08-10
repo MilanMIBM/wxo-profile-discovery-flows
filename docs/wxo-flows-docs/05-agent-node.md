@@ -1,4 +1,4 @@
-# Agent node — `agent()`
+# Agent node - `agent()`
 
 Calls an imported agent to perform a task.
 
@@ -10,19 +10,19 @@ node = aflow.agent(name=..., agent=..., display_name=..., title=..., message=...
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Node name. |
-| `agent` | `str` | yes | Name of the imported agent to call. |
-| `display_name` | `str` | no | UI name. |
-| `title` | `str` | no | Agent title. |
-| `message` | `str` | no | The instruction sent to the agent. Defaults to `"Follow the agent instructions"`. |
-| `description` | `str` | no | Node description. |
-| `input_schema` | `type[BaseModel]` | no | Input schema. |
-| `output_schema` | `type[BaseModel]` | no | Output schema. |
-| `guidelines` | `str` | no | Agent guidelines. |
-| `input_map` | `DataMap` | no | Structured input mapping. See [03](03-data-mapping.md). |
-| `error_handler_config` | `NodeErrorHandlerConfig` | no | Retry/branch on failure. See [20](20-error-handling.md). |
+| Param                  | Type                     | Req | Notes                                                                             |
+| ---------------------- | ------------------------ | --- | --------------------------------------------------------------------------------- |
+| `name`                 | `str`                    | yes | Node name.                                                                        |
+| `agent`                | `str`                    | yes | Name of the imported agent to call.                                               |
+| `display_name`         | `str`                    | no  | UI name.                                                                          |
+| `title`                | `str`                    | no  | Agent title.                                                                      |
+| `message`              | `str`                    | no  | The instruction sent to the agent. Defaults to `"Follow the agent instructions"`. |
+| `description`          | `str`                    | no  | Node description.                                                                 |
+| `input_schema`         | `type[BaseModel]`        | no  | Input schema.                                                                     |
+| `output_schema`        | `type[BaseModel]`        | no  | Output schema.                                                                    |
+| `guidelines`           | `str`                    | no  | Agent guidelines.                                                                 |
+| `input_map`            | `DataMap`                | no  | Structured input mapping. See [03](03-data-mapping.md).                           |
+| `error_handler_config` | `NodeErrorHandlerConfig` | no  | Retry/branch on failure. See [20](20-error-handling.md).                          |
 
 ## Minimum call form
 

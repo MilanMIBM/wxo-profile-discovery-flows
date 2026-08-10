@@ -153,9 +153,7 @@ def retrieve_database_tables(
                 stmt = stmt.bindparams(sqlalchemy.bindparam("vals", expanding=True))
 
             rows = conn.execute(stmt, params).mappings().all()
-            results.append(
-                {"table": tbl, "rows": [_jsonable_row(r) for r in rows]}
-            )
+            results.append({"table": tbl, "rows": [_jsonable_row(r) for r in rows]})
 
     return results
 
@@ -316,7 +314,7 @@ if __name__ == "__main__":
         json.dumps(
             retrieve_database_tables(
                 tables=["scoring", "details"],
-                match_column="quizId",
+                match_column="quiz_id",
                 match_value="some-quiz-id",
             ),
             ensure_ascii=False,

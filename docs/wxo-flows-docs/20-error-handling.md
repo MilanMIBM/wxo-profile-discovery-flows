@@ -1,4 +1,4 @@
-# Error handling — `NodeErrorHandlerConfig`
+# Error handling - `NodeErrorHandlerConfig`
 
 Per-node control over failure: retry, show a message, or redirect down an error edge.
 
@@ -19,21 +19,21 @@ nodes; via `error_handler=` on `script()` within parallel subflows.
 
 ## Parameters
 
-| Param | Type | Notes |
-| --- | --- | --- |
-| `error_message` | `str` | Describes the error. Logged for observability and debugging. **Not shown to the user** unless you surface it through a user flow or UI element. |
-| `max_retries` | `int` | Retry attempts after a failure. `0` → apply `on_error` immediately. Omitted → platform default. |
-| `retry_interval` | `int` | Delay between retries, in **milliseconds**. Only applies when `max_retries > 0`. |
-| `on_error` | `str` | How the flow responds. See below. |
-| `error_edge_id` | `str` | Edge to follow when `on_error="branch"`. Must match an `id` given to `aflow.edge(...)`. |
+| Param            | Type  | Notes                                                                                                                                           |
+| ---------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `error_message`  | `str` | Describes the error. Logged for observability and debugging. **Not shown to the user** unless you surface it through a user flow or UI element. |
+| `max_retries`    | `int` | Retry attempts after a failure. `0` → apply `on_error` immediately. Omitted → platform default.                                                 |
+| `retry_interval` | `int` | Delay between retries, in **milliseconds**. Only applies when `max_retries > 0`.                                                                |
+| `on_error`       | `str` | How the flow responds. See below.                                                                                                               |
+| `error_edge_id`  | `str` | Edge to follow when `on_error="branch"`. Must match an `id` given to `aflow.edge(...)`.                                                         |
 
 ## `on_error` values
 
-| Value | Behavior |
-| --- | --- |
-| `show_message` | Stops the flow after displaying an error message to the user. Use when no alternate path applies. |
-| `branch` | Redirects execution along `error_edge_id`. Use for expected failures, recovery paths, or fallback logic — suits services with variable availability. |
-| `continue` | Continues despite failure. Used for independent parallel branches. See [09](09-parallel-node.md). |
+| Value          | Behavior                                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show_message` | Stops the flow after displaying an error message to the user. Use when no alternate path applies.                                                    |
+| `branch`       | Redirects execution along `error_edge_id`. Use for expected failures, recovery paths, or fallback logic - suits services with variable availability. |
+| `continue`     | Continues despite failure. Used for independent parallel branches. See [09](09-parallel-node.md).                                                    |
 
 ## Error edges
 
@@ -55,7 +55,7 @@ dog_fact_node = aflow.tool(
 # Happy path
 aflow.sequence(START, dog_fact_node, END)
 
-# Error path — the id matches error_edge_id
+# Error path - the id matches error_edge_id
 aflow.edge(dog_fact_node, user_flow, id="dog_error_to_user_message")
 aflow.edge(user_flow, END)
 ```

@@ -7,35 +7,35 @@ and user-field `text`.
 
 ## Root keywords
 
-| Keyword | Refers to |
-| --- | --- |
-| `flow` | Top-level flow context. |
-| `parent` | The parent context — the enclosing flow for nodes inside a subflow. |
-| `self` | The current node. |
+| Keyword  | Refers to                                                           |
+| -------- | ------------------------------------------------------------------- |
+| `flow`   | Top-level flow context.                                             |
+| `parent` | The parent context - the enclosing flow for nodes inside a subflow. |
+| `self`   | The current node.                                                   |
 
 ## Reference patterns
 
-| Pattern | Meaning |
-| --- | --- |
-| `flow.input.<name>` | Flow input field. |
-| `flow.output.<name>` | Flow output field. |
-| `flow.private.<name>` | Flow private-state field (needs `private_schema`). |
-| `flow.<nodeName>.output.<name>` | Output of a named node in the flow. |
-| `flow.<nodeName>.input.<name>` | Input of a named node. |
-| `flow["<nodeName>"]["<field>"].output.value` | Bracket form — required when a name has spaces. |
-| `parent.[input\|output].<name>` | Input/output of the enclosing flow, from inside a subflow. |
-| `parent.[input\|output]["<name>"]` | Bracket form of the above. |
-| `parent.<nodeName>.[input\|output].<name>` | Another node in the enclosing flow. |
-| `parent["<nodeName>"].[input\|output]["<name>"]` | Bracket form. |
-| `self["input"].<name>` | Input of the current node. |
-| `self.input.<name>` | Dot form. Data-map targets use e.g. `self.input.value`, `self.input.choices`. |
+| Pattern                                          | Meaning                                                                       |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `flow.input.<name>`                              | Flow input field.                                                             |
+| `flow.output.<name>`                             | Flow output field.                                                            |
+| `flow.private.<name>`                            | Flow private-state field (needs `private_schema`).                            |
+| `flow.<nodeName>.output.<name>`                  | Output of a named node in the flow.                                           |
+| `flow.<nodeName>.input.<name>`                   | Input of a named node.                                                        |
+| `flow["<nodeName>"]["<field>"].output.value`     | Bracket form - required when a name has spaces.                               |
+| `parent.[input\|output].<name>`                  | Input/output of the enclosing flow, from inside a subflow.                    |
+| `parent.[input\|output]["<name>"]`               | Bracket form of the above.                                                    |
+| `parent.<nodeName>.[input\|output].<name>`       | Another node in the enclosing flow.                                           |
+| `parent["<nodeName>"].[input\|output]["<name>"]` | Bracket form.                                                                 |
+| `self["input"].<name>`                           | Input of the current node.                                                    |
+| `self.input.<name>`                              | Dot form. Data-map targets use e.g. `self.input.value`, `self.input.choices`. |
 
 ## Loop cursors
 
-| Pattern | Meaning |
-| --- | --- |
+| Pattern                 | Meaning                                              |
+| ----------------------- | ---------------------------------------------------- |
 | `parent._current_index` | Current index in a `foreach`. `null` outside a loop. |
-| `parent._current_item` | Current item in a `foreach`. `null` outside a loop. |
+| `parent._current_item`  | Current item in a `foreach`. `null` outside a loop.  |
 
 ## Operators and forms
 

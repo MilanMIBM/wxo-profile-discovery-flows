@@ -15,7 +15,7 @@
             <mxRectangle height="44" width="36" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-4" parent="fMZJE-0gJeLKbrxAgzvz-2" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-4" parent="fMZJE-0gJeLKbrxAgzvz-2" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_id" vertex="1">
           <mxGeometry height="44" width="350" x="36" as="geometry">
             <mxRectangle height="44" width="350" as="alternateBounds" />
           </mxGeometry>
@@ -294,7 +294,7 @@
             <mxRectangle height="45" width="42" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-65" parent="fMZJE-0gJeLKbrxAgzvz-63" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-65" parent="fMZJE-0gJeLKbrxAgzvz-63" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_id" vertex="1">
           <mxGeometry height="45" width="292" x="42" as="geometry">
             <mxRectangle height="45" width="292" as="alternateBounds" />
           </mxGeometry>
@@ -304,7 +304,7 @@
             <mxRectangle height="45" width="44" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-67" parent="fMZJE-0gJeLKbrxAgzvz-63" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="part 1 of composite key; FK to quiz_meta.quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-67" parent="fMZJE-0gJeLKbrxAgzvz-63" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="part 1 of composite key; FK to quiz_meta.quiz_id" vertex="1">
           <mxGeometry height="45" width="300" x="378" as="geometry">
             <mxRectangle height="45" width="300" as="alternateBounds" />
           </mxGeometry>
@@ -504,7 +504,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-111" parent="fMZJE-0gJeLKbrxAgzvz-109" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-111" parent="fMZJE-0gJeLKbrxAgzvz-109" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_id" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -514,7 +514,7 @@
             <mxRectangle height="44" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-113" parent="fMZJE-0gJeLKbrxAgzvz-109" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_meta.quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-113" parent="fMZJE-0gJeLKbrxAgzvz-109" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_meta.quiz_id" vertex="1">
           <mxGeometry height="44" width="318" x="381" as="geometry">
             <mxRectangle height="44" width="318" as="alternateBounds" />
           </mxGeometry>
@@ -527,7 +527,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-116" parent="fMZJE-0gJeLKbrxAgzvz-114" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_title" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-116" parent="fMZJE-0gJeLKbrxAgzvz-114" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="title" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -573,7 +573,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-126" parent="fMZJE-0gJeLKbrxAgzvz-124" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="displayName" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-126" parent="fMZJE-0gJeLKbrxAgzvz-124" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="display_name" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -642,7 +642,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-141" parent="fMZJE-0gJeLKbrxAgzvz-139" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="isOwner" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-141" parent="fMZJE-0gJeLKbrxAgzvz-139" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="is_owner" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -665,7 +665,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-146" parent="fMZJE-0gJeLKbrxAgzvz-144" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="submittedAt" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-146" parent="fMZJE-0gJeLKbrxAgzvz-144" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="submitted_at" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -688,7 +688,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-151" parent="fMZJE-0gJeLKbrxAgzvz-149" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="correctAnswers" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-151" parent="fMZJE-0gJeLKbrxAgzvz-149" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="correct_answers" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -711,7 +711,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-156" parent="fMZJE-0gJeLKbrxAgzvz-154" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="incorrectAnswers" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-156" parent="fMZJE-0gJeLKbrxAgzvz-154" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="incorrect_answers" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -734,7 +734,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-161" parent="fMZJE-0gJeLKbrxAgzvz-159" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="totalAnswered" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-161" parent="fMZJE-0gJeLKbrxAgzvz-159" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="total_answered" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -744,7 +744,7 @@
             <mxRectangle height="44" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-163" parent="fMZJE-0gJeLKbrxAgzvz-159" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="correctAnswers + incorrectAnswers" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-163" parent="fMZJE-0gJeLKbrxAgzvz-159" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="correct_answers + incorrect_answers" vertex="1">
           <mxGeometry height="44" width="318" x="381" as="geometry">
             <mxRectangle height="44" width="318" as="alternateBounds" />
           </mxGeometry>
@@ -757,7 +757,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-166" parent="fMZJE-0gJeLKbrxAgzvz-164" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="scorePct" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-166" parent="fMZJE-0gJeLKbrxAgzvz-164" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="score_pct" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -767,7 +767,7 @@
             <mxRectangle height="44" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-168" parent="fMZJE-0gJeLKbrxAgzvz-164" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="0-100, equals 100 * correctAnswers / totalAnswered" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-168" parent="fMZJE-0gJeLKbrxAgzvz-164" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="0-100, equals 100 * correct_answers / total_answered" vertex="1">
           <mxGeometry height="44" width="318" x="381" as="geometry">
             <mxRectangle height="44" width="318" as="alternateBounds" />
           </mxGeometry>
@@ -780,7 +780,7 @@
             <mxRectangle height="44" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-171" parent="fMZJE-0gJeLKbrxAgzvz-169" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="timeSeconds" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-171" parent="fMZJE-0gJeLKbrxAgzvz-169" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="completion_time" vertex="1">
           <mxGeometry height="44" width="311" x="48" as="geometry">
             <mxRectangle height="44" width="311" as="alternateBounds" />
           </mxGeometry>
@@ -806,7 +806,7 @@
             <mxRectangle height="45" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-177" parent="fMZJE-0gJeLKbrxAgzvz-175" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-177" parent="fMZJE-0gJeLKbrxAgzvz-175" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_id" vertex="1">
           <mxGeometry height="45" width="306" x="48" as="geometry">
             <mxRectangle height="45" width="306" as="alternateBounds" />
           </mxGeometry>
@@ -816,7 +816,7 @@
             <mxRectangle height="45" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-179" parent="fMZJE-0gJeLKbrxAgzvz-175" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_meta.quizId and quiz_structure.quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-179" parent="fMZJE-0gJeLKbrxAgzvz-175" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_meta.quiz_id and quiz_structure.quiz_id" vertex="1">
           <mxGeometry height="45" width="312" x="376" as="geometry">
             <mxRectangle height="45" width="312" as="alternateBounds" />
           </mxGeometry>
@@ -829,7 +829,7 @@
             <mxRectangle height="45" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-182" parent="fMZJE-0gJeLKbrxAgzvz-180" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="quiz_title" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-182" parent="fMZJE-0gJeLKbrxAgzvz-180" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="title" vertex="1">
           <mxGeometry height="45" width="306" x="48" as="geometry">
             <mxRectangle height="45" width="306" as="alternateBounds" />
           </mxGeometry>
@@ -875,7 +875,7 @@
             <mxRectangle height="45" width="48" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-192" parent="fMZJE-0gJeLKbrxAgzvz-190" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="submittedAt" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-192" parent="fMZJE-0gJeLKbrxAgzvz-190" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="submitted_at" vertex="1">
           <mxGeometry height="45" width="306" x="48" as="geometry">
             <mxRectangle height="45" width="306" as="alternateBounds" />
           </mxGeometry>
@@ -885,7 +885,7 @@
             <mxRectangle height="45" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-194" parent="fMZJE-0gJeLKbrxAgzvz-190" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="ISO-8601 UTC; matches quiz_scoring.submittedAt" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-194" parent="fMZJE-0gJeLKbrxAgzvz-190" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="ISO-8601 UTC; matches quiz_scoring.submitted_at" vertex="1">
           <mxGeometry height="45" width="312" x="376" as="geometry">
             <mxRectangle height="45" width="312" as="alternateBounds" />
           </mxGeometry>
@@ -908,7 +908,7 @@
             <mxRectangle height="45" width="22" as="alternateBounds" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="fMZJE-0gJeLKbrxAgzvz-199" parent="fMZJE-0gJeLKbrxAgzvz-195" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_structure.question_number for this quizId" vertex="1">
+        <mxCell id="fMZJE-0gJeLKbrxAgzvz-199" parent="fMZJE-0gJeLKbrxAgzvz-195" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=2;overflow=hidden;fontSize=11;" value="FK to quiz_structure.question_number for this quiz_id" vertex="1">
           <mxGeometry height="45" width="312" x="376" as="geometry">
             <mxRectangle height="45" width="312" as="alternateBounds" />
           </mxGeometry>

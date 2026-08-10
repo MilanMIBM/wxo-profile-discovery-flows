@@ -8,14 +8,14 @@ A flow **is a tool**. Manage it with the same CLI commands as any other tool.
 orchestrate tools import -k flow -f <file-path>
 ```
 
-| Flag | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `--kind` / `-k` | `str` | yes | Always `flow` for flow-based tools. |
+| Flag            | Type  | Req | Notes                                          |
+| --------------- | ----- | --- | ---------------------------------------------- |
+| `--kind` / `-k` | `str` | yes | Always `flow` for flow-based tools.            |
 | `--file` / `-f` | `str` | yes | Path to the flow file, or a URL containing it. |
 
 ## Build sequence
 
-1. Import the agents and tools the flow will call — they must exist first.
+1. Import the agents and tools the flow will call - they must exist first.
 2. Define the builder function with `@flow`.
 3. Import the flow: `orchestrate tools import -k flow -f <file>`.
 4. Test locally with a Python script.
@@ -40,19 +40,19 @@ if __name__ == "__main__":
 
 ### Compile
 
-| Method | Effect |
-| --- | --- |
-| `compile()` | Generates the JSON model only. No deploy. |
+| Method             | Effect                                                                          |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `compile()`        | Generates the JSON model only. No deploy.                                       |
 | `compile_deploy()` | Generates the model **and** deploys it to the engine. Returns a `CompiledFlow`. |
 
 ### `CompiledFlow.invoke()`
 
-| Param | Type | Notes |
-| --- | --- | --- |
-| `input_data` | `dict` | Input passed to the flow. |
-| `on_flow_end_handler` | `callable` | Called on successful completion. |
-| `on_flow_error_handler` | `callable` | Called on error. |
-| `debug` | `bool` | Enables debug mode. |
+| Param                   | Type       | Notes                            |
+| ----------------------- | ---------- | -------------------------------- |
+| `input_data`            | `dict`     | Input passed to the flow.        |
+| `on_flow_end_handler`   | `callable` | Called on successful completion. |
+| `on_flow_error_handler` | `callable` | Called on error.                 |
+| `debug`                 | `bool`     | Enables debug mode.              |
 
 ```py
 def on_flow_end(result):
@@ -99,7 +99,7 @@ and `AUTHORIZATION_URL` in `.env`.
 
 ## Managing
 
-List, export, update, and remove flows with the standard tool commands — a flow is a tool.
+List, export, update, and remove flows with the standard tool commands - a flow is a tool.
 
 ## Connections
 

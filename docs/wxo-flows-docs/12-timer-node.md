@@ -1,4 +1,4 @@
-# Timer node — `timer()`
+# Timer node - `timer()`
 
 Introduces a delay between actions.
 
@@ -8,13 +8,13 @@ node = aflow.timer(name=..., delay=..., display_name=..., description=..., input
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Unique node identifier. |
-| `delay` | `int` | yes | Delay in **milliseconds**. |
-| `display_name` | `str` | no | UI name. |
-| `description` | `str` | no | Node description. |
-| `input_map` | `DataMap` | no | Structured input mapping. See [03](03-data-mapping.md). |
+| Param          | Type      | Req | Notes                                                   |
+| -------------- | --------- | --- | ------------------------------------------------------- |
+| `name`         | `str`     | yes | Unique node identifier.                                 |
+| `delay`        | `int`     | yes | Delay in **milliseconds**.                              |
+| `display_name` | `str`     | no  | UI name.                                                |
+| `description`  | `str`     | no  | Node description.                                       |
+| `input_map`    | `DataMap` | no  | Structured input mapping. See [03](03-data-mapping.md). |
 
 ## Minimum call form
 

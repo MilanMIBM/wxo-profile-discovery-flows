@@ -1,4 +1,4 @@
-# Foreach node — `foreach()`
+# Foreach node - `foreach()`
 
 A nested subflow repeated once per item in a list. Returns a `Flow`.
 
@@ -8,11 +8,11 @@ foreach_flow: Flow = aflow.foreach(item_schema=ItemModel)
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `item_schema` | `BaseModel` | yes | Schema of each item iterated over. |
-| `input_schema` | `BaseModel` | no | Input schema of the nested subflow. |
-| `output_schema` | `BaseModel` | no | **Deprecated.** |
+| Param           | Type        | Req | Notes                               |
+| --------------- | ----------- | --- | ----------------------------------- |
+| `item_schema`   | `BaseModel` | yes | Schema of each item iterated over.  |
+| `input_schema`  | `BaseModel` | no  | Input schema of the nested subflow. |
+| `output_schema` | `BaseModel` | no  | **Deprecated.**                     |
 
 ## Call form
 
@@ -37,8 +37,8 @@ More than one node may live in the foreach subflow.
 
 Sets the processing method. Chains off `foreach()`.
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
+| Param  | Type            | Req | Notes                                                   |
+| ------ | --------------- | --- | ------------------------------------------------------- |
 | `kind` | `ForeachPolicy` | yes | `ForeachPolicy.SEQUENTIAL` or `ForeachPolicy.PARALLEL`. |
 
 ```py
@@ -48,18 +48,18 @@ foreach_flow: Flow = aflow.foreach(item_schema=CustomerRecord) \
     .policy(kind=ForeachPolicy.SEQUENTIAL)
 ```
 
-| Policy | Behavior | When |
-| --- | --- | --- |
+| Policy       | Behavior                                                     | When                                    |
+| ------------ | ------------------------------------------------------------ | --------------------------------------- |
 | `SEQUENTIAL` | One item at a time; next starts after the previous finishes. | Order of processing affects the result. |
-| `PARALLEL` | Multiple items at once. Usually faster. | Items are independent. |
+| `PARALLEL`   | Multiple items at once. Usually faster.                      | Items are independent.                  |
 
 ## Loop cursors
 
 Inside the subflow, reference the iteration position with:
 
-| Expression | Value |
-| --- | --- |
-| `parent._current_item` | Current item. `null` outside a loop. |
+| Expression              | Value                                 |
+| ----------------------- | ------------------------------------- |
+| `parent._current_item`  | Current item. `null` outside a loop.  |
 | `parent._current_index` | Current index. `null` outside a loop. |
 
 See [02-expressions.md](02-expressions.md).

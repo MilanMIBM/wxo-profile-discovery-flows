@@ -1,20 +1,20 @@
-# Parallel branch nodes — `parallel()` / `parallel_conditions()`
+# Parallel branch nodes - `parallel()` / `parallel_conditions()`
 
 Concurrent routing. Both return a **subflow** you add nodes to; the parent resumes only
 after every started branch reaches the subflow's `END`.
 
-| | `parallel()` | `parallel_conditions()` |
-| --- | --- | --- |
-| Runs | Every branch, always | Every branch whose condition matches |
-| Evaluator | `evaluator=None` | conditions via `condition()` |
+|           | `parallel()`         | `parallel_conditions()`              |
+| --------- | -------------------- | ------------------------------------ |
+| Runs      | Every branch, always | Every branch whose condition matches |
+| Evaluator | `evaluator=None`     | conditions via `condition()`         |
 
 ## `parallel(evaluator=None, name=..., display_name=...)`
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `evaluator` | `Conditions \| None` | no | `None` = unconditional; all branches run. |
-| `name` | `str` | no | Generated if omitted. |
-| `display_name` | `str` | no | UI name. |
+| Param          | Type                 | Req | Notes                                     |
+| -------------- | -------------------- | --- | ----------------------------------------- |
+| `evaluator`    | `Conditions \| None` | no  | `None` = unconditional; all branches run. |
+| `name`         | `str`                | no  | Generated if omitted.                     |
+| `display_name` | `str`                | no  | UI name.                                  |
 
 Use for: running multiple teams at once, sending work to multiple services, processing data
 through multiple pipelines.
@@ -32,21 +32,21 @@ Each branch is wired `START → branch → END` **inside** the subflow.
 
 ## `parallel_conditions(name=..., display_name=...)`
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Generated if left empty. |
-| `display_name` | `str` | no | Defaults to the node name. |
+| Param          | Type  | Req | Notes                      |
+| -------------- | ----- | --- | -------------------------- |
+| `name`         | `str` | yes | Generated if left empty.   |
+| `display_name` | `str` | no  | Defaults to the node name. |
 
 Use for: multi-criteria processing, routing to multiple handlers by attribute, fan-out on
 matching conditions.
 
 ### `condition(to_node, expression=None, default=False)`
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `to_node` | `Node` | yes | Node to run when the condition matches. |
-| `expression` | `str` | cond. | Required unless `default=True`. |
-| `default` | `bool` | no | The else case. |
+| Param        | Type   | Req   | Notes                                   |
+| ------------ | ------ | ----- | --------------------------------------- |
+| `to_node`    | `Node` | yes   | Node to run when the condition matches. |
+| `expression` | `str`  | cond. | Required unless `default=True`.         |
+| `default`    | `bool` | no    | The else case.                          |
 
 ```py
 p = aflow.parallel_conditions(name="task_processing")
@@ -64,7 +64,7 @@ p.sequence(dflt, END)
 aflow.sequence(START, p, END)
 ```
 
-All matching conditions run concurrently — unlike `conditions()`, matching does not stop at
+All matching conditions run concurrently - unlike `conditions()`, matching does not stop at
 the first hit.
 
 ## Merging
@@ -89,7 +89,7 @@ task = p.script(
 )
 ```
 
-## Constraint — no loop-back
+## Constraint - no loop-back
 
 Never edge a parallel branch back to an earlier node. This spawns unlimited parallel
 threads and breaks at runtime.

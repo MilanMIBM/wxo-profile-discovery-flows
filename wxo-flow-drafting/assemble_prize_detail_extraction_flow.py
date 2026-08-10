@@ -111,7 +111,26 @@ def _():
     return (rewrite_tables,)
 
 
-@app.cell
+@app.function(hide_code=True)
+def value_select_mapping(df, key_col, value_col):
+    """Build a {key_col value: value_col value} dict from a dataframe.
+
+    Args:
+        df: A pandas or polars dataframe.
+        key_col: Name of the column whose values become dict keys.
+        value_col: Name of the column whose values become dict values.
+
+    Returns:
+        dict mapping each row's key_col value to its value_col value.
+    """
+    if hasattr(df, "to_dicts"):
+        rows = df.to_dicts()
+    else:
+        rows = df.to_dict(orient="records")
+    return {row[key_col]: row[value_col] for row in rows}
+
+
+@app.cell(hide_code=True)
 def _(postgresql_engine, rewrite_tables):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
@@ -163,25 +182,46 @@ def _(postgresql_engine, rewrite_tables):
 @app.cell
 def _():
     retrieve_number = mo.ui.number(
-        label="**Control number of records to retrieve:**",
+        label="**Control number of records to retrieve :**",
         start=0,
         stop=1000,
         step=1,
-        value=50,
+        value=3,
     )
-    retrieve_number
+    # retrieve_number
     return (retrieve_number,)
 
 
-@app.cell(hide_code=True)
-def _(postgresql_engine, retrieve_number):
-    quiz_meta = mo.sql(
-        f"""
-        SELECT * FROM "quiz_meta" LIMIT {retrieve_number.value}
-        """,
-        output=False,
-        engine=postgresql_engine
+@app.cell
+def _(retrieve_number, select_account):
+    filter_stack = mo.hstack(
+        [select_account, retrieve_number], justify="space-around"
     )
+    # filter_stack
+    return (filter_stack,)
+
+
+@app.cell(hide_code=True)
+def _(postgresql_engine, retrieve_number, select_account):
+    if select_account.value:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            WHERE "account_id" = '{select_account.value}'
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
+    else:
+        quiz_meta = mo.sql(
+            f"""
+            SELECT * FROM "quiz_meta"
+            LIMIT {retrieve_number.value}
+            """,
+            engine=postgresql_engine,
+            output=False,
+        )
     return (quiz_meta,)
 
 
@@ -190,11 +230,11 @@ def _(postgresql_engine, quiz_meta):
     quiz_structure = mo.sql(
         f"""
         SELECT * FROM "quiz_structure"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -204,11 +244,11 @@ def _(postgresql_engine, quiz_meta):
     quiz_details = mo.sql(
         f"""
         SELECT * FROM "quiz_details" 
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -218,13 +258,37 @@ def _(postgresql_engine, quiz_meta):
     quiz_scoring = mo.sql(
         f"""
         SELECT * FROM "quiz_scoring"
-        WHERE "quizId" IN ({",".join(map(repr, quiz_meta["quizId"].to_list())) or "NULL"})
+        WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
+
+
+@app.cell
+def _(postgresql_engine):
+    account_ids_unique = mo.sql(
+        f"""
+        SELECT DISTINCT "account_id" FROM "quiz_meta"
+        """,
+        output=False,
+        engine=postgresql_engine,
+    )
+    return (account_ids_unique,)
+
+
+@app.cell
+def _(account_ids_unique):
+    account_id_list = account_ids_unique.account_id.to_list()
+    select_account = mo.ui.dropdown(
+        label="**Select account to filter by :**",
+        options=account_id_list,
+        # value=account_id_list[0],
+    )
+    # select_account
+    return (select_account,)
 
 
 @app.cell(hide_code=True)
@@ -242,7 +306,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "prize.prize_name", "prize.prize_url" FROM "quiz_meta" WHERE "prize.prize_url" IS NOT NULL
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (prize_urls,)
 
@@ -254,7 +318,7 @@ def _(prize_urls):
     _prize_url_mapping = dict(zip(prize_names_list, prize_urls_list))
 
     select_prize_url = mo.ui.dropdown(
-        label="**Select prize URL:**",
+        label="**Select prize URL :**",
         options=_prize_url_mapping,
         value=prize_names_list[0],
         full_width=True,
@@ -263,7 +327,7 @@ def _(prize_urls):
     return
 
 
-@app.function
+@app.function(hide_code=True)
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
@@ -278,7 +342,7 @@ def as_table_entry(name, df):
     }
 
 
-@app.function
+@app.function(hide_code=True)
 def jsonable_row(row):
     """Convert a dataframe row mapping to a plain JSON-serialisable dict.
 
@@ -338,9 +402,8 @@ def _(quiz_details, quiz_meta, quiz_scoring, quiz_structure):
 
 @app.cell
 def _(db_records):
-    # Same input shape as the respondent-profile flow: the retrieve_tables
-    # node's table bundle.
-    test_flow = {"retrieve_tables": {"output": db_records}}
+    # Same input shape as the respondent-profile flow and the *_node.py notebooks: the retrieved_tables bundle as a bare list of table entries.
+    test_flow = {"retrieved_tables": db_records}
     return (test_flow,)
 
 
@@ -350,15 +413,36 @@ def _():
     return
 
 
-@app.cell
-def _():
-    return
-
-
 @app.cell(column=1, hide_code=True)
 def _():
     mo.md(r"""
-    ### Class definitions
+    ## Logic blocks
+    """)
+    return
+
+
+@app.cell
+def _():
+    # The tool, prompt nodes and their schemas are authored and locally tested in
+    # wxo_prize_details_node.py; imported here so there is exactly one definition
+    # of each and this notebook only wires them together.
+    from wxo_prize_details_node import (
+        build_prompt_extract_prize_details,
+        build_prompt_metadata_tag_generation,
+        fetch_url_data,
+    )
+
+    return (
+        build_prompt_extract_prize_details,
+        build_prompt_metadata_tag_generation,
+        fetch_url_data,
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
     """)
     return
 
@@ -379,7 +463,7 @@ class PrizeItem(BaseModel):
     quiz_id: Optional[str] = Field(
         default=None, description="Id of the quiz the prize belongs to."
     )
-    quiz_title: Optional[str] = Field(
+    title: Optional[str] = Field(
         default=None, description="Title of the quiz the prize belongs to."
     )
     brand_name: Optional[str] = Field(
@@ -420,89 +504,41 @@ class PrizeItem(BaseModel):
     )
 
 
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    ## Logic blocks
-    """)
-    return
-
-
 @app.cell
 def _():
-    # The tool, prompt nodes and their schemas are authored and locally tested in
-    # wxo_prize_details_node.py; imported here so there is exactly one definition
-    # of each and this notebook only wires them together.
-    from wxo_prize_details_node import (
-        build_prompt_extract_prize_details,
-        build_prompt_metadata_tag_generation,
-        fetch_url_data,
-    )
-
-    return (
-        build_prompt_extract_prize_details,
-        build_prompt_metadata_tag_generation,
-        fetch_url_data,
-    )
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    ---
-    """)
-    return
-
-
-@app.cell
-def _():
-    # Collect one record per distinct prize out of the raw quiz_meta table.
-    #
-    # Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-    # `self` and `parent` are injected, `json` is pre-bound (no imports), and there
-    # is no return value -- output happens by assignment.
-    #
-    # Reads:  the table bundle (quiz_meta) from the flow input -- either nested
-    #         under "retrieve_tables" ({"retrieve_tables": {"output": [...]}}) or
-    #         as the input itself ({"output": [...]})
-    # Writes: self.output.prizes              -- list of prize records to iterate
-    #         self.output.prizes_num          -- how many were collected
-    #         self.output.prizes_with_url_num -- how many carry a prize url
-    #
-    # The counters live on the node's public output only: flow.private.* requires
-    # a private_schema on the @flow decorator, and an undeclared private write
-    # fails inside the first node and kills the whole run.
-    #
-    # The flat `prize.*` columns are nested into one record per quizId. `prize_url`
-    # is normalised to "" rather than None so the downstream branch can test it
-    # without tripping over nulls.
     @logic_block(
         display_name="Collect prize catalogue",
         output_schema=PrizeCatalogueOutput,
     )
     def collect_prize_catalogue(flow, self, parent, json):
-        """Collapses the quiz_meta table into one record per distinct prize, nesting the flat prize.* columns and flagging which prizes carry a fetchable url."""
-        # This is the first node in the flow, so the tables come from the flow's
-        # own input, not an upstream node. Accept the bundle nested under
-        # "retrieve_tables" (the caller passing a retrieval node's context
-        # through verbatim) or as the input itself.
-        flow_input = flow["input"] or {}
-        node_out = flow_input.get("retrieve_tables") or flow_input
-        if not isinstance(node_out, dict):
-            node_out = {}
-        tables = node_out.get("output")
+        """Collapses the quiz_meta table into one record per distinct prize, nesting the flat prize.* columns and flagging which prizes carry a fetchable url.
 
-        # The tool returns a bare array; tolerate a wrapped {key: [...]} shape too.
+        Runs in the flow engine's restricted sandbox, NOT as a normal module:
+        `flow`, `self` and `parent` are injected, `json` is pre-bound (no
+        imports), and there is no return value -- output happens by assignment.
+
+        Reads:  the table bundle (quiz_meta) from the flow input -- bare, or
+                nested under "retrieved_tables" / an "output" wrapper
+        Writes: self.output.prizes              -- prize records to iterate
+                self.output.prizes_num          -- how many were collected
+                self.output.prizes_with_url_num -- how many carry a prize url
+
+        The counters live on the node's public output only: flow.private.*
+        requires a private_schema on the @flow decorator, and an undeclared
+        private write fails inside the first node and kills the whole run."""
+
+        # First node in the flow, so the tables come from the flow's own input. The bundle is normally a bare list of {"table":..., "rows":[...]}, but a caller passing a retrieval node's context through verbatim wraps it.
+        flow_input = flow["input"] or {}
+        tables = flow_input.get("retrieved_tables") or flow_input
         if isinstance(tables, dict):
-            for key in ("result", "output", "value", "tables"):
+            for key in ("output", "result", "value", "tables"):
                 if isinstance(tables.get(key), list):
                     tables = tables[key]
                     break
         if not isinstance(tables, list):
             tables = []
 
-        # brand_tags / prize_type are stored as JSON-array strings ('["a","b"]') but
-        # may also arrive as a real list, empty, or "[]". Normalise to a list.
+        # Tags are stored as JSON-array strings ('["a","b"]') but may also arrive as a real list, empty, or "[]".
         def parse_tags(value):
             if value is None:
                 return []
@@ -519,8 +555,7 @@ def _():
                 return parsed if isinstance(parsed, list) else []
             return []
 
-        # Missing values arrive as None or as the string "nan" once the CSV has been
-        # round-tripped; treat both as absent.
+        # Missing values arrive as None or as the string "nan" once the CSV has been round-tripped; treat both as absent. "" rather than None so the downstream url test never trips over a null.
         def text(value):
             if value is None:
                 return ""
@@ -534,7 +569,7 @@ def _():
         seen = {}
         with_url = 0
         for m in quiz_meta:
-            qid = m.get("quizId")
+            qid = m.get("quiz_id")
             if qid is None or qid in seen:
                 continue
             seen[qid] = True
@@ -546,7 +581,7 @@ def _():
             records.append(
                 {
                     "quiz_id": qid,
-                    "quiz_title": text(m.get("title")),
+                    "title": text(m.get("title")),
                     "brand_name": text(m.get("brand_name")),
                     "brand_tags": parse_tags(m.get("brand_tags")),
                     "language": text(m.get("language")),
@@ -564,9 +599,6 @@ def _():
         self.output.prizes_num = len(records)
         self.output.prizes_with_url_num = with_url
 
-        # Start the accumulator empty. This node runs once, before the loop, so
-        # the parallel iterations always append to a list that already exists
-        # rather than racing to create it.
         flow.private.enriched_prizes = []
 
     return (collect_prize_catalogue,)
@@ -598,70 +630,70 @@ def _():
 
 
 @app.function
-# Shape this iteration's prize into the inputs the downstream nodes expect.
-#
-# Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-# `self` and `parent` are injected, `json` is pre-bound (no imports), and there
-# is no return value -- output happens by assignment.
-#
-# Reads:  parent._current_item -- the prize record for this iteration
-# Writes: self.output.urls            -- [] when no url, so fetch_url_data is a no-op
-#         self.output.<PrizeInfo fields> -- brand/prize/value/currency + tag knobs
-#
-# fetch_url_data takes a LIST of urls and returns one entry per url, so an empty
-# list is the natural "nothing to fetch" signal -- no branch predicate needed.
 @logic_block(
     display_name="Stage prize inputs",
 )
 def stage_prize_inputs(flow, self, parent, json):
-    """Turns the current prize record into the url list the fetch tool consumes and the baseline prize fields the tag-generation prompt consumes."""
+    """Turns the current prize record into the url list the fetch tool consumes and the baseline prize fields the tag-generation prompt consumes.
+
+    Runs in the flow engine's restricted sandbox, NOT as a normal module:
+    `flow`, `self` and `parent` are injected, `json` is pre-bound (no imports),
+    and there is no return value -- output happens by assignment.
+
+    Reads:  parent._current_item -- the prize record for this iteration
+    Writes: self.output.urls -- [] when no url, so fetch_url_data is a no-op
+            self.output.<PrizeInfo fields> -- brand/prize/value/currency + knobs
+
+    fetch_url_data takes a LIST of urls and returns one entry per url, so an
+    empty list is the natural "nothing to fetch" signal -- no branch needed."""
     prize = dict(parent._current_item or {})
 
     url = prize.get("prize_url") or ""
-    # A list so fetch_url_data yields exactly one document per url, and nothing
-    # at all when the catalogue has no page for this prize.
     self.output.urls = [url] if url else []
     self.output.has_prize_url = bool(url)
 
-    # PrizeInfo fields consumed by prize_metadata_tag_generation. Empty strings
-    # rather than None: the prompt interpolates these straight into its text.
     self.output.brand_name = prize.get("brand_name") or ""
     self.output.prize_name = prize.get("prize_name") or ""
     self.output.prize_description = prize.get("prize_description") or ""
     self.output.prize_value = prize.get("prize_value") or "0"
     self.output.prize_currency = prize.get("prize_currency") or ""
 
-    # Tuning knobs for the tag prompt, overridable from the flow input.
     self.output.tag_type = (
         flow["input"].get("tag_type") or "type, purpose, audience"
     )
     self.output.number_of_tags = int(
         flow["input"].get("number_of_tags") or 8
     )
+    self.output.preview_inputs = prize
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
 
 
 @app.function
-# 🧩 Pick the single fetched document out of the fetch tool's list output.
-#
-# Runs in the flow engine's restricted sandbox, NOT as a normal module: `flow`,
-# `self` and `parent` are injected, `json` is pre-bound (no imports), and there
-# is no return value -- output happens by assignment.
-#
-# Reads:  self.input.documents -- fetch_url_data's list of strings, one per url
-# Writes: self.output.page_content -- the first document, or "" when none
-#
-# fetch_url_data never raises on a bad url; it returns an "ERROR: ..." string in
-# that slot. Those are turned into "" so the extraction prompt sees no content
-# rather than being asked to summarise an error message.
 @logic_block(
     display_name="Select fetched page",
 )
 def select_fetched_page(flow, self, parent, json):
-    """Reduces the fetch tool's list of documents to the single page string the extraction prompt expects, blanking failures and empty fetches."""
-    inputs = self["input"] or parent.fetch_url_data.output.documents or {}
+    """Reduces the fetch tool's list of documents to the single page string the extraction prompt expects, blanking failures and empty fetches.
 
-    # `inputs` is normally the node's input mapping ({"documents": [...]}), but
-    # the fetch tool's output can also arrive as the bare list of documents.
+    Runs in the flow engine's restricted sandbox, NOT as a normal module:
+    `flow`, `self` and `parent` are injected, `json` is pre-bound (no imports),
+    and there is no return value -- output happens by assignment.
+
+    Reads:  self.input.documents -- fetch_url_data's strings, one per url
+    Writes: self.output.page_content -- the first usable document, else ""
+
+    fetch_url_data never raises on a bad url; it returns an "ERROR: ..." string
+    in that slot. Those become "" so the extraction prompt sees no content
+    rather than being asked to summarise an error message."""
+    inputs = parent.fetch_url_data.output.documents or {}
+
     if isinstance(inputs, dict):
         documents = inputs.get("documents") or []
     elif isinstance(inputs, list):
@@ -685,46 +717,35 @@ def select_fetched_page(flow, self, parent, json):
 
 @app.cell
 def _():
-    # Join the enrichment results into one prize record.
-    #
-    # Node-name agnostic: reads self.input rather than any named node, so the
-    # upstream nodes can be renamed or added to without touching this block --
-    # only the data map wiring their outputs into this node's input changes.
-    #
-    # Reads:  parent._current_item -- the prize record for this iteration
-    #         self.input.*         -- whatever the enrichment nodes produced
-    # Writes: self.output.prize / .prize_description / .metadata_tags / .result_json
     @logic_block(
         display_name="Assemble prize record",
         output_schema=EnrichedPrizeOutput,
     )
     def assemble_prize_record(flow, self, parent, json):
-        """Layers the extracted specification text and the generated metadata tags onto the prize record this iteration started from."""
-        prize = dict(parent._current_item or {})
-        inputs = self["input"] or {}
+        """Layers the extracted specification text and the generated metadata tags onto the prize record this iteration started from.
 
-        # self.input is filled by EXPLICIT maps in the flow builder:
-        #   generated_description <- extract_prize_details
-        #                            (CleanedPrizeDescription.prize_description)
-        #   tags                  <- prize_metadata_tag_generation
-        #                            (MetadataTags.tags, the whole object)
-        # The record's own catalogue blurb is a different thing entirely: it
-        # comes from parent._current_item, never from these inputs.
+        Reads:  parent._current_item -- the prize record for this iteration
+                self.input.*         -- whatever the enrichment nodes produced
+        Writes: self.output.prize / .prize_description / .metadata_tags
+                / .result_json
+
+        Node-name agnostic: reads self.input rather than any named node, so
+        upstream nodes can be renamed or added to without touching this body --
+        only the data maps wiring them into this node's input change.
+
+        self.input is filled by EXPLICIT maps in the flow builder:
+          generated_description <- extract_prize_details
+          tags                  <- prize_metadata_tag_generation (whole object)
+        The record's own catalogue blurb is a different thing entirely: it
+        comes from parent._current_item, never from these inputs."""
+        prize = dict(parent._current_item or {})
 
         prize_description = prize.get("prize_description") or ""
         generated_description = (
-            inputs.get("generated_description")
-            or parent.extract_prize_details.output.generated_description
-            or ""
+            parent.extract_prize_details.output.generated_description or ""
         )
 
-        # `tags` is the MetadataTags.tags object; the list lives one level in.
-        # Guarded because the map's default ("{}") lands here as an empty dict
-        # or None whenever the tag node produced nothing.
-        tags_obj = (
-            inputs.get("tags")
-            or parent.prize_metadata_tag_generation.output.tags
-        )
+        tags_obj = parent.prize_metadata_tag_generation.output.tags or {}
         tags = (
             tags_obj.get("metadata_tags")
             if isinstance(tags_obj, dict)
@@ -738,14 +759,7 @@ def _():
         self.output.generated_description = generated_description
         self.output.metadata_tags = tags
         self.output.prize = prize
-        self.output.result_json = json.dumps(prize)
-        self.output.preview_inputs = inputs
 
-        # Hand this iteration's record to the flow-scoped accumulator -- the only
-        # channel that reaches build_prize_table, since the foreach exposes no
-        # readable aggregate of its own. Rebuilt rather than appended in place:
-        # the sandbox evaluates in a restricted namespace and in-place mutation
-        # of flow.private is not dependable.
         self.output.row = {
             "quiz_id": prize.get("quiz_id"),
             "prize_name": prize.get("prize_name"),
@@ -753,7 +767,6 @@ def _():
             "generated_description": generated_description,
             "metadata_tags": tags,
             "prize": prize,
-            "result_json": json.dumps(prize),
         }
         collected = flow["private"].get("enriched_prizes") or []
         flow.private.enriched_prizes = collected + [self.output.row]
@@ -787,60 +800,142 @@ class EnrichedPrizeOutput(BaseModel):
     prize: Optional[dict] = Field(
         default=None, description="The whole enriched prize record."
     )
-    result_json: Optional[str] = Field(
-        default=None,
-        description="The enriched prize record as a JSON string.",
-    )
-    preview_inputs: Optional[dict] = Field(
-        default=None,
-        description="The inputs preview for debugging",
-    )
     row: Optional[dict] = Field(
         default=None,
         description="This iteration's record as appended to flow.private.enriched_prizes.",
     )
 
 
-@app.class_definition
-### for_each_prize - aggregated Output Schema
-class PrizeTableOutput(BaseModel):
-    """Intended aggregate shape of the for_each_prize loop -- NOT wired up.
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
 
-    UNUSED, kept as documentation of a dead end. This was passed as the
-    foreach's `output_schema` on the assumption that it gives the engine a
-    field to accumulate each iteration into. It does not: `output_schema` is
-    deprecated on foreach (docs/wxo-flows-docs/10-foreach-node.md), and passing
-    it only compiled a schema no node ever wrote to, leaving the loop's
-    output_map null and `output.rows` empty.
 
-    The loop's output is now mapped as a whole into build_prize_table instead.
-    """
-
-    rows: List[EnrichedPrizeOutput] = Field(
-        default_factory=list,
-        description="One enriched prize record per iteration of the loop, in catalogue order.",
+@app.cell
+def _(PrizeTableOutputs):
+    @logic_block(
+        display_name="Build prize table",
+        output_schema=PrizeTableOutputs,
     )
+    def build_prize_table(flow, self, parent, json, each):
+        """Flattens the loop's enriched prize records into one flat dict per prize so the result loads straight into a dataframe.
+
+        Runs ONCE, after the foreach -- it reads the whole accumulated list, not a
+        single item, so it sits outside the loop where `parent._current_item` is
+        meaningless.
+
+        Reads:  parent.<for_each_flow_name>.<last_node_name>.output -- the for_each's aggregated per-iteration outputs
+        Writes: self.output.rows      -- flat dicts, one per prize
+                self.output.row_count -- how many rows were produced
+
+        The loop hands back each iteration's assemble_prize_record output, which
+        nests the catalogue fields under `prize`. Pandas would turn that nested
+        dict into a single object-dtype column, so those fields are lifted to the
+        top level here and the row is left entirely flat."""
+        inputs = (
+            {"rows": parent.for_each_prize.assemble_prize_record.output}
+            if isinstance(
+                parent.for_each_prize.assemble_prize_record.output, list
+            )
+            else (
+                parent.for_each_prize.assemble_prize_record.output
+                if isinstance(
+                    parent.for_each_prize.assemble_prize_record.output, dict
+                )
+                else {}
+            )
+        )
+        rows_in = inputs.get("rows")
+
+        # Tolerate the bare list and the {rows: [...]} / {items: [...]} wrappers.
+        if isinstance(rows_in, dict):
+            for key in ("rows", "items", "output", "result"):
+                if isinstance(rows_in.get(key), list):
+                    rows_in = rows_in[key]
+                    break
+        if not isinstance(rows_in, list):
+            rows_in = []
+
+        # The mapped input is the fallback, not the primary source: the foreach exposes no readable aggregate, so the records actually arrive via the flow-scoped list each iteration appended to.
+        if not rows_in:
+            collected = flow["private"].get("enriched_prizes")
+            if isinstance(collected, list):
+                rows_in = collected
+
+        def text(value):
+            return "" if value is None else str(value)
+
+        def tags(value):
+            return [t for t in value if t] if isinstance(value, list) else []
+
+        rows_out = []
+        for entry in rows_in:
+            if not isinstance(entry, dict):
+                continue
+
+            # Each entry is an assemble_prize_record output; the catalogue fields live one level down under `prize`.
+            prize = entry.get("prize")
+            if not isinstance(prize, dict):
+                prize = {}
+
+            rows_out.append(
+                {
+                    "quiz_id": text(
+                        entry.get("quiz_id") or prize.get("quiz_id")
+                    ),
+                    "title": text(prize.get("title")),
+                    "brand_name": text(prize.get("brand_name")),
+                    "language": text(prize.get("language")),
+                    "prize_name": text(
+                        entry.get("prize_name") or prize.get("prize_name")
+                    ),
+                    "prize_url": text(prize.get("prize_url")),
+                    "prize_value": text(prize.get("prize_value")),
+                    "prize_currency": text(prize.get("prize_currency")),
+                    "prize_description": text(entry.get("prize_description")),
+                    "generated_description": text(
+                        entry.get("generated_description")
+                    ),
+                    "metadata_tags": tags(entry.get("metadata_tags")),
+                    "brand_tags": tags(prize.get("brand_tags")),
+                    "prize_type": tags(prize.get("prize_type")),
+                    "has_prize_url": bool(prize.get("has_prize_url")),
+                }
+            )
+
+        self.output.rows = rows_out
+        self.output.row_count = len(rows_out)
+        self.output.preview_inputs = inputs
+
+    return (build_prize_table,)
 
 
-@app.class_definition
-### Flow-level private state
-class PrizeFlowPrivate(BaseModel):
-    """Internal accumulator for the for_each_prize loop.
+@app.cell
+def _():
+    class PrizeTableOutputs(BaseModel):
+        """Final output of the prize_detail_extraction flow.
 
-    The foreach node exposes no readable aggregate of its iterations: its
-    `output_schema` is deprecated and populates nothing, and mapping the loop's
-    output (whole or by leaf) into a downstream node yields empty. So each
-    iteration appends its own record to this flow-scoped list instead, and
-    build_prize_table reads the finished list after the loop.
+        `rows` is a flat list of one dict per prize, every value a scalar or a list
+        of strings, so `pd.DataFrame(result["rows"])` yields a table directly with
+        no further unnesting.
+        """
 
-    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
-    node inside the subflow write somewhere a node outside it can read.
-    """
+        rows: List[EnrichedPrizeTableRow] = Field(
+            default_factory=list,
+            description="One flat row per prize, ready to load straight into a dataframe.",
+        )
+        row_count: Optional[int] = Field(
+            default=None, description="How many prize rows were produced."
+        )
+        preview_inputs: Optional[dict] = Field(
+            default=None,
+            description="The inputs preview for debugging",
+        )
 
-    enriched_prizes: List[dict] = Field(
-        default_factory=list,
-        description="One enriched prize record per completed iteration.",
-    )
+    return (PrizeTableOutputs,)
 
 
 @app.class_definition
@@ -858,7 +953,7 @@ class EnrichedPrizeTableRow(BaseModel):
     quiz_id: Optional[str] = Field(
         default=None, description="Id of the quiz the prize belongs to."
     )
-    quiz_title: Optional[str] = Field(
+    title: Optional[str] = Field(
         default=None, description="Title of the quiz the prize belongs to."
     )
     brand_name: Optional[str] = Field(
@@ -904,121 +999,6 @@ class EnrichedPrizeTableRow(BaseModel):
         default=None,
         description="Whether the prize carried a fetchable url.",
     )
-    result_json: Optional[str] = Field(
-        default=None,
-        description="The whole enriched prize record as a JSON string.",
-    )
-
-
-@app.class_definition
-### Flow-level Output Schema
-class PrizeDetailExtractionOutput(BaseModel):
-    """Final output of the prize_detail_extraction flow.
-
-    `rows` is a flat list of one dict per prize, every value a scalar or a list
-    of strings, so `pd.DataFrame(result["rows"])` yields a table directly with
-    no further unnesting.
-    """
-
-    rows: List[EnrichedPrizeTableRow] = Field(
-        default_factory=list,
-        description="One flat row per prize, ready to load straight into a dataframe.",
-    )
-    row_count: Optional[int] = Field(
-        default=None, description="How many prize rows were produced."
-    )
-    preview_inputs: Optional[dict] = Field(
-        default=None,
-        description="The inputs preview for debugging",
-    )
-
-
-@app.function
-# Flatten the loop's per-iteration records into dataframe-ready rows.
-#
-# Runs ONCE, after the foreach -- it reads the whole accumulated list, not a
-# single item, so it sits outside the loop where `parent._current_item` is
-# meaningless.
-#
-# Reads:  self.input.rows -- the foreach's aggregated per-iteration outputs
-# Writes: self.output.rows      -- flat dicts, one per prize
-#         self.output.row_count -- how many rows were produced
-#
-# The loop hands back each iteration's assemble_prize_record output, which
-# nests the catalogue fields under `prize`. Pandas would turn that nested
-# dict into a single object-dtype column, so the catalogue fields are lifted
-# up to the top level here and the row is left entirely flat.
-@logic_block(
-    display_name="Build prize table",
-    output_schema=PrizeDetailExtractionOutput,
-)
-def build_prize_table(flow, self, parent, json):
-    """Flattens the loop's enriched prize records into one flat dict per prize so the result loads straight into a dataframe."""
-    inputs = self["input"] or {}
-    rows_in = inputs.get("rows")
-
-    # Tolerate the bare list and the {rows: [...]} / {items: [...]} wrappers.
-    if isinstance(rows_in, dict):
-        for key in ("rows", "items", "output", "result"):
-            if isinstance(rows_in.get(key), list):
-                rows_in = rows_in[key]
-                break
-    if not isinstance(rows_in, list):
-        rows_in = []
-
-    # The mapped input is the fallback, not the primary source: the foreach
-    # exposes no readable aggregate, so the records actually arrive via the
-    # flow-scoped list each iteration appended to.
-    if not rows_in:
-        collected = flow["private"].get("enriched_prizes")
-        if isinstance(collected, list):
-            rows_in = collected
-
-    def text(value):
-        return "" if value is None else str(value)
-
-    def tags(value):
-        return [t for t in value if t] if isinstance(value, list) else []
-
-    rows_out = []
-    for entry in rows_in:
-        if not isinstance(entry, dict):
-            continue
-
-        # Each entry is an assemble_prize_record output; the catalogue
-        # fields live one level down under `prize`.
-        prize = entry.get("prize")
-        if not isinstance(prize, dict):
-            prize = {}
-
-        rows_out.append(
-            {
-                "quiz_id": text(
-                    entry.get("quiz_id") or prize.get("quiz_id")
-                ),
-                "quiz_title": text(prize.get("quiz_title")),
-                "brand_name": text(prize.get("brand_name")),
-                "language": text(prize.get("language")),
-                "prize_name": text(
-                    entry.get("prize_name") or prize.get("prize_name")
-                ),
-                "prize_url": text(prize.get("prize_url")),
-                "prize_value": text(prize.get("prize_value")),
-                "prize_currency": text(prize.get("prize_currency")),
-                "prize_description": text(entry.get("prize_description")),
-                "generated_description": text(
-                    entry.get("generated_description")
-                ),
-                "metadata_tags": tags(entry.get("metadata_tags")),
-                "brand_tags": tags(prize.get("brand_tags")),
-                "prize_type": tags(prize.get("prize_type")),
-                "has_prize_url": bool(prize.get("has_prize_url")),
-            }
-        )
-
-    self.output.rows = rows_out
-    self.output.row_count = len(rows_out)
-    self.output.preview_inputs = inputs
 
 
 @app.cell(column=2, hide_code=True)
@@ -1037,9 +1017,50 @@ def _():
     return
 
 
+@app.class_definition
+### Flow-level private state
+class PrizeFlowPrivate(BaseModel):
+    """Internal accumulator for the for_each_prize loop.
+
+    The foreach node exposes no readable aggregate of its iterations: its
+    `output_schema` is deprecated and populates nothing, and mapping the loop's
+    output (whole or by leaf) into a downstream node yields empty. So each
+    iteration appends its own record to this flow-scoped list instead, and
+    build_prize_table reads the finished list after the loop.
+
+    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
+    node inside the subflow write somewhere a node outside it can read.
+    """
+
+    enriched_prizes: List[dict] = Field(
+        default_factory=list,
+        description="One enriched prize record per completed iteration.",
+    )
+
+
+@app.class_definition
+### Flow-level Output Schema
+class PrizeFlowOutput(BaseModel):
+    """Final output of the prize_detail_extraction flow.
+
+    `rows` is a flat list of one dict per prize, every value a scalar or a list
+    of strings, so `pd.DataFrame(result["rows"])` yields a table directly with
+    no further unnesting.
+    """
+
+    rows: List[EnrichedPrizeTableRow] = Field(
+        default_factory=list,
+        description="One flat row per prize, ready to load straight into a dataframe.",
+    )
+    row_count: int = Field(
+        default=0, description="How many prize rows were produced."
+    )
+
+
 @app.cell
 def _(
     assemble_prize_record,
+    build_prize_table,
     build_prompt_extract_prize_details,
     build_prompt_metadata_tag_generation,
     collect_prize_catalogue,
@@ -1050,69 +1071,36 @@ def _(
     @flow(
         name=flow_name,
         display_name=display_name,
-        output_schema=PrizeDetailExtractionOutput,
-        # REQUIRED for the flow.private.enriched_prizes accumulator. An
-        # undeclared private write fails inside the writing node and kills the run.
+        output_schema=PrizeFlowOutput,
         private_schema=PrizeFlowPrivate,
         description=(
-            "Collects every distinct prize from the raw quiz tables, then per prize "
-            "fetches its page and reduces it to specification text with an LLM and "
-            "generates enriched metadata tags from the baseline prize information, "
-            "returning a flat table of one enriched row per prize."
+            """Collects every distinct prize from the raw quiz tables, then per prize fetches its page and reduces it to specification text with an LLM and generates enriched metadata tags from the baseline prize information, returning a flat table of one enriched row per prize."""
         ),
     )
     def build_prize_detail_extraction_flow(aflow: Flow) -> Flow:
-        # Collapses the table bundle into one record per prize. Runs ONCE,
-        # before the loop -- it reads whole tables and emits the list to iterate.
+
         collect = collect_prize_catalogue(aflow)
 
-        # One iteration per prize; PARALLEL since prizes are independent.
-        #
-        # NO output_schema: it is deprecated on foreach (see
-        # docs/wxo-flows-docs/10-foreach-node.md) and does NOT make the loop
-        # accumulate. Passing PrizeTableOutput here compiled a for_each_prize_output
-        # schema with a `rows` field that nothing ever wrote to, so the foreach's
-        # output_map stayed null and `output.rows` resolved to [] -- which is what
-        # left build_prize_table with row_count 0. The loop's own output is read
-        # as a whole below instead.
         each: Flow = aflow.foreach(
             item_schema=PrizeItem,
             name="for_each_prize",
             display_name="For each prize",
+            # ).policy(kind=ForeachPolicy.SEQUENTIAL)
         ).policy(kind=ForeachPolicy.PARALLEL)
 
-        # REQUIRED: a foreach with no input_schema auto-generates a required
-        # "items" input -- sequencing collect -> each only orders execution, it
-        # does not map collect's output.prizes onto that "items" field. Without
-        # this map the foreach never receives anything to iterate and nothing
-        # downstream runs. (Same wiring as the respondent-profile flow.)
         each.map_input("items", f"flow.{collect.spec.name}.output.prizes")
 
-        # Shapes this prize into the downstream nodes' inputs. `urls` is empty
-        # when the catalogue has no page, which makes the fetch a no-op rather
-        # than needing a branch predicate.
+        ### --- Nodes inside the for_each loop --- Start
         stage = stage_prize_inputs(each)
 
-        # Fetch the prize page, reduce it to the single document, then summarise
-        # it down to specification text.
         fetch = each.tool(fetch_url_data)
-        # Same-scope sibling now that everything is flat in the foreach, so the
-        # root is `flow`. Empty list default: stage emits [] for a prize with no
-        # url, and fetch_url_data returns nothing rather than erroring on it.
+
         fetch.map_input(
             "urls",
             f"parent.{stage.spec.name}.output.urls",
         )
 
         select = select_fetched_page(each)
-        # REQUIRED: select_fetched_page reads self.input generically, so the
-        # fetch tool's output must be mapped in explicitly -- auto-mapping only
-        # fills nodes that declare an input_schema. Same-scope sibling, LEAF
-        # field as declared by FetchUrlDataOutput.
-        select.map_input(
-            "documents",
-            f"parent.{fetch.spec.name}.output.documents",
-        )
 
         extract = build_prompt_extract_prize_details(each)
         extract.map_input(
@@ -1120,27 +1108,14 @@ def _(
             f"parent.{select.spec.name}.output.page_content",
         )
 
-        # Tags come from the baseline prize information, so this does not depend
-        # on the fetch -- it just runs after it now instead of beside it.
         tag_generation = build_prompt_metadata_tag_generation(each)
         tag_generation.map_input(
             "generated_description",
             f"parent.{extract.spec.name}.output.generated_description",
         )
 
-        # Layers both results onto this iteration's prize record. Every node is
-        # a same-scope sibling now that the parallel is gone, so these bind
-        # explicitly with `flow.<node>.output.<field>` instead of relying on
-        # auto-mapping to cross a subflow boundary.
         assemble = assemble_prize_record(each)
-        assemble.map_input(
-            "generated_description",
-            f"parent.{extract.spec.name}.output.generated_description",
-        )
-        assemble.map_input(
-            "tags",
-            f"parent.{tag_generation.spec.name}.output.tags",
-        )
+        ### --- Nodes inside the for_each loop --- End
 
         each.sequence(
             START,
@@ -1153,20 +1128,7 @@ def _(
             END,
         )
 
-        # Flattens the loop's accumulated records into dataframe-ready rows.
-        # Runs ONCE after the loop, at top level, so `flow.` reaches the foreach
-        # as a sibling node -- the aggregation-after-a-subflow pattern from
-        # docs/wxo-flows-docs/07-script-node.md.
-        #
-        # Maps the loop's output as a WHOLE (no `.rows` leaf): with output_schema
-        # gone there is no declared field to address, so the engine's own
-        # collection shape arrives here and build_prize_table's wrapper-tolerance
-        # unwraps whichever key it lands under.
         table = build_prize_table(aflow)
-        table.map_input(
-            "rows",
-            f"parent.{each.spec.name}.output",
-        )
 
         aflow.sequence(
             START,
@@ -1209,7 +1171,7 @@ def _(flow_name):
     return (FLOW_SPEC_PATH,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(FLOW_SPEC_PATH):
     def import_flow_to_wxo(aflow, path=FLOW_SPEC_PATH, dry_run=False):
         """Compile the notebook's flow and import it into the active wxo environment.
@@ -1251,7 +1213,7 @@ def _(FLOW_SPEC_PATH):
 @app.cell
 def _():
     run_flow_import = mo.ui.run_button(label="**Import flow into wxo**")
-    run_flow_import
+    # run_flow_import
     return (run_flow_import,)
 
 
@@ -1266,14 +1228,13 @@ def _(flow_import, import_flow_to_wxo, run_flow_import):
     flow_import_result = (
         import_flow_to_wxo(flow_import) if run_flow_import.value else None
     )
-    flow_import_result
-    return
+    return (flow_import_result,)
 
 
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    /// admonition | Test Deployed Flow
+    /// admonition | Import & Test Deployed Flow
     """)
     return
 
@@ -1298,25 +1259,6 @@ def _(InferenceClient):
     return (flows_client,)
 
 
-@app.function
-def value_select_mapping(df, key_col, value_col):
-    """Build a {key_col value: value_col value} dict from a dataframe.
-
-    Args:
-        df: A pandas or polars dataframe.
-        key_col: Name of the column whose values become dict keys.
-        value_col: Name of the column whose values become dict values.
-
-    Returns:
-        dict mapping each row's key_col value to its value_col value.
-    """
-    if hasattr(df, "to_dicts"):
-        rows = df.to_dicts()
-    else:
-        rows = df.to_dict(orient="records")
-    return {row[key_col]: row[value_col] for row in rows}
-
-
 @app.cell
 def _(flows_client, run_flow_import):
     _refresh_flows = run_flow_import.value or True
@@ -1330,7 +1272,7 @@ def _(flows_client, run_flow_import):
 @app.cell
 def _(flow_name, flow_selection):
     flow_selection_dropdown = mo.ui.dropdown(
-        label="**Select flow to test:**",
+        label="**Select flow to test :**",
         options=flow_selection,
         value=(
             flow_name
@@ -1340,26 +1282,51 @@ def _(flow_name, flow_selection):
             )
         ),
     )
-    flow_selection_dropdown
     return (flow_selection_dropdown,)
 
 
 @app.cell
-def _(flow_selection_dropdown):
-    print(flow_selection_dropdown.value)
-    return
+def _(flow_run_test, flow_selection_dropdown):
+    test_stack = mo.hstack(
+        [flow_selection_dropdown, flow_run_test], justify="space-around"
+    )
+    return (test_stack,)
 
 
 @app.cell
 def _():
-    flow_run_test = mo.ui.run_button(label="Test Run Deployed Flow")
-    flow_run_test
+    flow_run_test = mo.ui.run_button(label="**Test Run Deployed Flow**")
+    # flow_run_test
     return (flow_run_test,)
 
 
 @app.cell
 def _():
     # This type of API call to wxo requires a user apikey rather than a service_id one.
+    return
+
+
+@app.cell
+def _(run_flow_import):
+    run_flow_import
+    return
+
+
+@app.cell
+def _(flow_import_result):
+    flow_import_result
+    return
+
+
+@app.cell
+def _(filter_stack):
+    filter_stack
+    return
+
+
+@app.cell
+def _(test_stack):
+    test_stack
     return
 
 
@@ -1383,7 +1350,11 @@ def _(flow_result):
 
 @app.cell
 def _(flow_result):
-    flow_result_table = pd.DataFrame(flow_result.get("rows"))
+    flow_result_table = (
+        pd.DataFrame(flow_result.get("rows"))
+        if flow_result is not None
+        else pd.DataFrame({})
+    )
     flow_result_table
     return
 

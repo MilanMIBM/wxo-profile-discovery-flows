@@ -2,31 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://llm-qual-categorization/dynamic-data-enrichment/schemas/quiz_scoring.schema.json",
   "title": "quiz_scoring",
-  "description": "One row per quiz submission: the per-submission score summary. Source table data/tables/quiz_scoring.csv. Rolls up to the `submissions.json` records the enrichment template consumes; keyed to details.csv by (quizId, submission_id).",
+  "description": "One row per quiz submission: the per-submission score summary. Source table data/tables/quiz_scoring.csv. Rolls up to the `submissions.json` records the enrichment template consumes; keyed to details.csv by (quiz_id, submission_id).",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "quizId",
-    "quiz_title",
+    "quiz_id",
+    "title",
     "submission_id",
-    "displayName",
+    "display_name",
     "email",
     "anonymous",
-    "isOwner",
-    "submittedAt",
-    "correctAnswers",
-    "incorrectAnswers",
-    "totalAnswered",
-    "scorePct",
-    "timeSeconds"
+    "is_owner",
+    "submitted_at",
+    "correct_answers",
+    "incorrect_answers",
+    "total_answered",
+    "score_pct",
+    "completion_time"
   ],
   "properties": {
-    "quizId": {
-      "description": "Quiz this submission belongs to. Foreign key to quiz_meta.quizId / quiz_structure.quizId.",
+    "quiz_id": {
+      "description": "Quiz this submission belongs to. Foreign key to quiz_meta.quiz_id / quiz_structure.quiz_id.",
       "type": "string",
       "format": "uuid"
     },
-    "quiz_title": {
+    "title": {
       "description": "Denormalized quiz title, mirrors quiz_meta.title.",
       "type": "string",
       "minLength": 1
@@ -36,7 +36,7 @@
       "type": "string",
       "format": "uuid"
     },
-    "displayName": {
+    "display_name": {
       "description": "Respondent's display name; the literal 'Anonymous' when the submission is anonymous.",
       "type": "string",
       "minLength": 1
@@ -50,37 +50,37 @@
       "description": "Whether the respondent submitted anonymously.",
       "type": "boolean"
     },
-    "isOwner": {
+    "is_owner": {
       "description": "Whether the respondent is the quiz owner. Always False in the current data.",
       "type": "boolean"
     },
-    "submittedAt": {
+    "submitted_at": {
       "description": "Submission timestamp, ISO-8601 UTC.",
       "type": "string",
       "format": "date-time"
     },
-    "correctAnswers": {
+    "correct_answers": {
       "description": "Number of correct answers in this submission.",
       "type": "integer",
       "minimum": 0
     },
-    "incorrectAnswers": {
+    "incorrect_answers": {
       "description": "Number of incorrect answers in this submission.",
       "type": "integer",
       "minimum": 0
     },
-    "totalAnswered": {
-      "description": "Total questions answered (correctAnswers + incorrectAnswers).",
+    "total_answered": {
+      "description": "Total questions answered (correct_answers + incorrect_answers).",
       "type": "integer",
       "minimum": 0
     },
-    "scorePct": {
-      "description": "Score as a percentage, 0-100 (100 * correctAnswers / totalAnswered).",
+    "score_pct": {
+      "description": "Score as a percentage, 0-100 (100 * correct_answers / total_answered).",
       "type": "number",
       "minimum": 0,
       "maximum": 100
     },
-    "timeSeconds": {
+    "completion_time": {
       "description": "Time taken to complete the submission, in seconds.",
       "type": "integer",
       "minimum": 0

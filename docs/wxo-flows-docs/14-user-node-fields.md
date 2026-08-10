@@ -1,9 +1,9 @@
-# User activity — `userflow()` and `field()`
+# User activity - `userflow()` and `field()`
 
 User activity nodes are interactive steps. Two styles:
 
-- **Multi-turn** — `field()`, one piece of data per conversational turn. This sheet.
-- **Form** — `form()`, many pieces in a single turn. See [15](15-user-node-forms.md).
+- **Multi-turn** - `field()`, one piece of data per conversational turn. This sheet.
+- **Form** - `form()`, many pieces in a single turn. See [15](15-user-node-forms.md).
 
 Both live inside a `userflow()` subflow.
 
@@ -19,32 +19,32 @@ user_flow.spec.display_name = "Application"
 Returns a `UserFlow` (a subflow). Build it with its own `START`/`END`, then wire it into
 the parent as one node.
 
-| Member | Notes |
-| --- | --- |
-| `field(...)` | Add a multi-turn field node. |
-| `form(...)` | Add a form node. See [15](15-user-node-forms.md). |
-| `script(...)` | Add a script node. See [07](07-script-node.md). |
-| `edge()` / `sequence()` | Wire internal nodes. |
-| `assign_to(...)` | Route the activity to specific users. See [16](16-user-assignment.md). |
-| `spec.display_name` | UI name of the user flow. |
+| Member                  | Notes                                                                  |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `field(...)`            | Add a multi-turn field node.                                           |
+| `form(...)`             | Add a form node. See [15](15-user-node-forms.md).                      |
+| `script(...)`           | Add a script node. See [07](07-script-node.md).                        |
+| `edge()` / `sequence()` | Wire internal nodes.                                                   |
+| `assign_to(...)`        | Route the activity to specific users. See [16](16-user-assignment.md). |
+| `spec.display_name`     | UI name of the user flow.                                              |
 
 ## `field()`
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `name` | `str` | yes | Unique node identifier. |
-| `kind` | `UserFieldKind` | yes | Field type. |
-| `direction` | `str` | yes | `"input"` (collect) or `"output"` (display). |
-| `display_name` | `str` | no | UI name — this is what expressions reference in bracket form. |
-| `description` | `str` | no | Node description. |
-| `text` | `str` | no | Displayed text; interpolates expressions in braces. |
-| `default` | `Any` | no | Default value. |
-| `option` | `UserFieldOption` | no | Predefined options with labels and values. |
-| `is_list` | `bool` | no | Field accepts multiple values. |
-| `min` | `Any` | no | Minimum value/constraint. |
-| `max` | `Any` | no | Maximum value/constraint. |
-| `input_map` | `DataMap` | no | Structured input mapping. See [03](03-data-mapping.md). |
-| `custom` | `dict` | no | Additional metadata/configuration. |
+| Param          | Type              | Req | Notes                                                         |
+| -------------- | ----------------- | --- | ------------------------------------------------------------- |
+| `name`         | `str`             | yes | Unique node identifier.                                       |
+| `kind`         | `UserFieldKind`   | yes | Field type.                                                   |
+| `direction`    | `str`             | yes | `"input"` (collect) or `"output"` (display).                  |
+| `display_name` | `str`             | no  | UI name - this is what expressions reference in bracket form. |
+| `description`  | `str`             | no  | Node description.                                             |
+| `text`         | `str`             | no  | Displayed text; interpolates expressions in braces.           |
+| `default`      | `Any`             | no  | Default value.                                                |
+| `option`       | `UserFieldOption` | no  | Predefined options with labels and values.                    |
+| `is_list`      | `bool`            | no  | Field accepts multiple values.                                |
+| `min`          | `Any`             | no  | Minimum value/constraint.                                     |
+| `max`          | `Any`             | no  | Maximum value/constraint.                                     |
+| `input_map`    | `DataMap`         | no  | Structured input mapping. See [03](03-data-mapping.md).       |
+| `custom`       | `dict`            | no  | Additional metadata/configuration.                            |
 
 ## `UserFieldKind`
 
@@ -74,7 +74,7 @@ user_flow.field(direction="output", name="display_first_name",
                 text="Display of first name is {flow.input.first_name}")
 ```
 
-### File download — value via `DataMap`
+### File download - value via `DataMap`
 
 ```py
 dm = DataMap()
@@ -84,7 +84,7 @@ user_flow.field(direction="output", name="download", display_name="Download file
                 kind=UserFieldKind.File, input_map=dm)
 ```
 
-### List output — array literal
+### List output - array literal
 
 ```py
 dm = DataMap()
@@ -94,7 +94,7 @@ user_flow.field(direction="output", name="Friends", display_name="List of friend
                 kind=UserFieldKind.List, input_map=dm)
 ```
 
-### Choice input — options via `self.input.choices`
+### Choice input - options via `self.input.choices`
 
 ```py
 dm = DataMap()

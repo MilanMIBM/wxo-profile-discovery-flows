@@ -1,4 +1,4 @@
-quizId,quiz_title,submission_id,displayName,email,anonymous,isOwner,submittedAt,correctAnswers,incorrectAnswers,totalAnswered,scorePct,timeSeconds
+quiz_id,title,submission_id,display_name,email,anonymous,is_owner,submitted_at,correct_answers,incorrect_answers,total_answered,score_pct,completion_time
 c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,1ead5aa0-135e-c365-dd5a-34e28385fd54,Anonymous,temp@k4n9x2p7q1w8z5r3t6y0m4l2.com,True,False,2026-06-20T09:00:00Z,5,0,5,100.0,70
 c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,7fdc5a8b-3b14-85dc-43c7-5d8893874e81,Liene Bērziņa,liene.berzina@example.lv,False,False,2026-06-20T10:07:00Z,3,2,5,60.0,57
 c1849e65-cc70-48e3-bdeb-ed2d62b7565f,Nike Run Club: Marathon Legends,416d4409-c05e-0c73-7130-373b9ee20f76,Sofia Bianchi,sofia.bianchi@demo-inbox.net,False,False,2026-06-20T11:14:00Z,1,4,5,20.0,22

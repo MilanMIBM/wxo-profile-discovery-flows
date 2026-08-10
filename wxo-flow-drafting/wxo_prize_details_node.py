@@ -107,9 +107,7 @@ def _(postgresql_engine, rewrite_tables):
         if name in existing and rewrite_tables:
             print(f"{name}: dropping existing table")
             with postgresql_engine.connect() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         # Always recreate the table, even if it already exists
@@ -148,7 +146,7 @@ def _(prize_urls):
     _prize_url_mapping = dict(zip(prize_names_list, prize_urls_list))
 
     select_prize_url = mo.ui.dropdown(
-        label="**Select prize URL:**",
+        label="**Select prize URL :**",
         options=_prize_url_mapping,
         value=prize_names_list[0],
         full_width=False,
@@ -316,9 +314,7 @@ def _():
 class PrizeInfo(BaseModel):
     brand_name: str = Field(description="Brand that provides the prize.")
     prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(
-        description="Free-text description of the prize."
-    )
+    prize_description: str = Field(description="Free-text description of the prize.")
     generated_description: str = Field(
         default="",
         description="Optional cleaned or generated prize description containing only specification-related content.",
@@ -332,9 +328,7 @@ class PrizeInfo(BaseModel):
     tag_type: str = Field(
         description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
     )
-    number_of_tags: int = Field(
-        description="How many metadata tags to generate."
-    )
+    number_of_tags: int = Field(description="How many metadata tags to generate.")
 
 
 @app.function
@@ -386,9 +380,7 @@ class MetadataTags(BaseModel):
     class Tags(BaseModel):
         metadata_tags: list[str] = Field(description="Output tags.")
 
-    tags: Tags = Field(
-        description="Object wrapper for the metadata tag output."
-    )
+    tags: Tags = Field(description="Object wrapper for the metadata tag output.")
 
 
 @app.cell(column=2, hide_code=True)
@@ -401,9 +393,7 @@ def _():
 
 @app.cell
 def _(run_tests, select_prize_url):
-    mo.hstack(
-        [select_prize_url, run_tests], justify="space-around", align="center"
-    )
+    mo.hstack([select_prize_url, run_tests], justify="space-around", align="center")
     return
 
 
@@ -426,9 +416,7 @@ def _(run_tests, test_url_fetch):
 
 @app.cell
 def _(url_contents):
-    mo.md(
-        url_contents.content["documents"][0]
-    ) if url_contents is not None else None
+    mo.md(url_contents.content["documents"][0]) if url_contents is not None else None
     return
 
 

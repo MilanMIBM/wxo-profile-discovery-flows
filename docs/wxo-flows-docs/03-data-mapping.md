@@ -9,27 +9,27 @@ If you supply no mapping, the flow engine maps data at runtime using an LLM. Lar
 are automatically summarized first; without summarization auto-mapping exceeds token limits
 and behaves unpredictably.
 
-Explicit mapping overrides auto-mapping. Where correctness matters — notably docproc
-outputs — map every field explicitly so automap cannot substitute a wrong guess.
+Explicit mapping overrides auto-mapping. Where correctness matters - notably docproc
+outputs - map every field explicitly so automap cannot substitute a wrong guess.
 
 ### `FlowContextWindow`
 
 Tunes the compression that protects auto-mapping.
 
-| Field | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `compression_threshold` | `int \| None` | `None` | Compress once the context reaches this token count. |
-| `compression_instruction` | `str \| None` | `None` | Use-case-specific summarization instruction. |
-| `max_tokens` | `int \| None` | `None` | Max tokens the model supports. |
-| `allow_compress` | `bool \| None` | `True` | Whether compression is permitted. |
+| Field                     | Type           | Default | Notes                                               |
+| ------------------------- | -------------- | ------- | --------------------------------------------------- |
+| `compression_threshold`   | `int \| None`  | `None`  | Compress once the context reaches this token count. |
+| `compression_instruction` | `str \| None`  | `None`  | Use-case-specific summarization instruction.        |
+| `max_tokens`              | `int \| None`  | `None`  | Max tokens the model supports.                      |
+| `allow_compress`          | `bool \| None` | `True`  | Whether compression is permitted.                   |
 
 ## `node.map_input(input_variable, expression, default_value=None)`
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `input_variable` | `str` | yes | Field on the node's input schema. |
-| `expression` | `str` | yes | Source expression. |
-| `default_value` | `str` | no | Fallback when the expression yields nothing. |
+| Param            | Type  | Req | Notes                                        |
+| ---------------- | ----- | --- | -------------------------------------------- |
+| `input_variable` | `str` | yes | Field on the node's input schema.            |
+| `expression`     | `str` | yes | Source expression.                           |
+| `default_value`  | `str` | no  | Fallback when the expression yields nothing. |
 
 ```py
 node.map_input(input_variable="first_name", expression="flow.input.first_name")
@@ -66,20 +66,20 @@ node = user_flow.field(direction="output", name="x", kind=UserFieldKind.Text, in
 
 ### `Assignment`
 
-| Param | Type | Notes |
-| --- | --- | --- |
-| `target_variable` | `str` | Destination, typically `self.input.<slot>`. |
+| Param              | Type  | Notes                                                            |
+| ------------------ | ----- | ---------------------------------------------------------------- |
+| `target_variable`  | `str` | Destination, typically `self.input.<slot>`.                      |
 | `value_expression` | `str` | Expression string; literals must be literal *inside* the string. |
 
 ### Common `target_variable` slots
 
-| Slot | Used by |
-| --- | --- |
-| `self.input.value` | Field value, file download, `field_output_field`. |
-| `self.input.choices` | Choice/list fields. |
-| `self.input.default` | Any field's default. |
-| `self.input.min_date` / `self.input.max_date` | Date fields. |
-| `self.input.min_num_files` / `self.input.max_num_files` | File upload. |
+| Slot                                                    | Used by                                           |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `self.input.value`                                      | Field value, file download, `field_output_field`. |
+| `self.input.choices`                                    | Choice/list fields.                               |
+| `self.input.default`                                    | Any field's default.                              |
+| `self.input.min_date` / `self.input.max_date`           | Date fields.                                      |
+| `self.input.min_num_files` / `self.input.max_num_files` | File upload.                                      |
 
 ## `input_map` parameter
 
@@ -89,9 +89,9 @@ fields that take a `DataMap` rather than a scalar.
 
 ## Schema contract
 
-| Param | Role |
-| --- | --- |
-| `input_schema` | Structure and types the node expects. The contract for required/optional inputs. |
-| `map_input` | Binds incoming data to the node's parameters, optionally transforming or defaulting. |
-| `output_schema` | Structure and types the node returns. |
-| `map_output` | Builds the final output object per the output schema. |
+| Param           | Role                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `input_schema`  | Structure and types the node expects. The contract for required/optional inputs.     |
+| `map_input`     | Binds incoming data to the node's parameters, optionally transforming or defaulting. |
+| `output_schema` | Structure and types the node returns.                                                |
+| `map_output`    | Builds the final output object per the output schema.                                |

@@ -1,4 +1,4 @@
-# User assignment — `assign_to()`
+# User assignment - `assign_to()`
 
 Routes a user activity node to specific tenant users. Called on a `UserFlow`.
 
@@ -12,23 +12,23 @@ user_flow.assign_to(policy=UserAssignmentPolicy.USER, assignees='flow.private.de
 
 ## Parameters
 
-| Param | Type | Req | Notes |
-| --- | --- | --- | --- |
-| `policy` | `UserAssignmentPolicy` | yes | Who receives the activity. |
-| `assignees` | `str` | cond. | Expression resolving to user(s). Required when `policy=USER`. |
+| Param       | Type                   | Req   | Notes                                                         |
+| ----------- | ---------------------- | ----- | ------------------------------------------------------------- |
+| `policy`    | `UserAssignmentPolicy` | yes   | Who receives the activity.                                    |
+| `assignees` | `str`                  | cond. | Expression resolving to user(s). Required when `policy=USER`. |
 
 ## `UserAssignmentPolicy`
 
-| Value | Behavior |
-| --- | --- |
+| Value            | Behavior                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `FLOW_INITIATOR` | Assigns to whoever started the flow. This is the default when no policy is set, and always the behavior in Preview mode. |
-| `USER` | Assigns to the user(s) resolved from `assignees`. |
+| `USER`           | Assigns to the user(s) resolved from `assignees`.                                                                        |
 
 ## `assignees` expression forms
 
-| Form | Example |
-| --- | --- |
-| JSON array with a user ID string | `'["123002B12G"]'` |
+| Form                                  | Example                           |
+| ------------------------------------- | --------------------------------- |
+| JSON array with a user ID string      | `'["123002B12G"]'`                |
 | Flow variable path referencing a user | `'flow.private.employee.manager'` |
 
 The expression is evaluated at runtime and the activity is assigned to the resolved user.
@@ -64,7 +64,7 @@ def build(aflow: Flow) -> Flow:
 
 ## Multiple assignments in one flow
 
-Each `userflow()` carries its own policy — mix assigned and initiator-facing activities
+Each `userflow()` carries its own policy - mix assigned and initiator-facing activities
 freely.
 
 ```py
