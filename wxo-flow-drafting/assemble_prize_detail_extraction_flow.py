@@ -105,12 +105,6 @@ def _():
     return
 
 
-@app.cell
-def _():
-    rewrite_tables = os.getenv("REWRITE_TABLES", False)
-    return (rewrite_tables,)
-
-
 @app.function(hide_code=True)
 def value_select_mapping(df, key_col, value_col):
     """Build a {key_col value: value_col value} dict from a dataframe.
@@ -131,12 +125,22 @@ def value_select_mapping(df, key_col, value_col):
 
 
 @app.cell(hide_code=True)
-def _(postgresql_engine, rewrite_tables):
+def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    TABLES_DIR = "src/data/tables"
+    # Drop existing tables before reloading them from CSV. Compare the string, since
+    # bool("False") is True.
+    rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
+    print(f"Rewrite tables: **{rewrite_tables}**")
+
+    TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
+
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
+    # in the directory and it gets loaded without touching this cell.
+    table_csvs = sorted(TABLES_DIR.glob("*.csv"))
+    print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
     # Columns stored in the CSV as JSON-array strings ('["a","b"]') that should land in Postgres as native jsonb (real lists) rather than plain text.
     JSON_COLUMNS = {
@@ -152,17 +156,24 @@ def _(postgresql_engine, rewrite_tables):
         s = str(val).strip()
         return json.loads(s) if s else None
 
-    for name in ["quiz_structure", "quiz_meta", "quiz_scoring", "quiz_details"]:
-        if name in existing and rewrite_tables:
+    for csv_path in table_csvs:
+        name = csv_path.stem
+
+        # Missing tables are always created; existing ones are only rebuilt when rewrite_tables is set, so a partial set fills in the gaps.
+        if name in existing and not rewrite_tables:
+            print(f"{name}: already exists, skipping (rewrite_tables is False)")
+            continue
+
+        if name in existing:
             print(f"{name}: dropping existing table")
-            with postgresql_engine.connect() as connection:
+
+            with postgresql_engine.begin() as connection:
                 connection.execute(
                     text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
                 )
             existing.remove(name)
 
-        # Always recreate the table, even if it already exists
-        df = pd.read_csv(f"{TABLES_DIR}/{name}.csv")
+        df = pd.read_csv(csv_path)
         dtype = {}
         for col in JSON_COLUMNS.get(name, []):
             if col in df.columns:
@@ -172,7 +183,7 @@ def _(postgresql_engine, rewrite_tables):
             name,
             postgresql_engine,
             index=False,
-            if_exists="replace",
+            if_exists="fail",
             dtype=dtype,
         )
         print(f"{name}: created, loaded {len(df)} rows")
@@ -657,6 +668,7 @@ def stage_prize_inputs(flow, self, parent, json):
     self.output.prize_description = prize.get("prize_description") or ""
     self.output.prize_value = prize.get("prize_value") or "0"
     self.output.prize_currency = prize.get("prize_currency") or ""
+    self.output.language = prize.get("language") or ""
 
     self.output.tag_type = (
         flow["input"].get("tag_type") or "type, purpose, audience"
@@ -1107,11 +1119,19 @@ def _(
             "page_content",
             f"parent.{select.spec.name}.output.page_content",
         )
+        extract.map_input(
+            "output_language",
+            f"parent.{stage.spec.name}.output.language",
+        )
 
         tag_generation = build_prompt_metadata_tag_generation(each)
         tag_generation.map_input(
             "generated_description",
             f"parent.{extract.spec.name}.output.generated_description",
+        )
+        tag_generation.map_input(
+            "output_language",
+            f"parent.{stage.spec.name}.output.language",
         )
 
         assemble = assemble_prize_record(each)

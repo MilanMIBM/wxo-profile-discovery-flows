@@ -1140,6 +1140,8 @@ class InferenceClient:
         agent_id: Optional[str] = None,
         agent_version: Optional[str] = None,
         execution_summary: Optional[bool] = None,
+        retries: int = 0,
+        retry_delay: float = 0.0,
         **kwargs: Any,
     ) -> Optional[Dict[str, Any]]:
         """
@@ -1158,6 +1160,10 @@ class InferenceClient:
             Defaults to an empty object.
         request_timeout:
             The flow request timeout in milliseconds (query param, default 60000).
+            Also used to derive the client-side socket timeout (this value in
+            seconds, plus a 5s grace so a server-side timeout response wins when
+            possible) so a stalled call raises instead of hanging forever.
+            Override it by passing ``timeout=`` through ``kwargs``.
         thread_id:
             Optional ID of the thread where the flow was started
             (x-ibm-thread-id header).
@@ -1171,10 +1177,23 @@ class InferenceClient:
         execution_summary:
             When True, generate the flow execution summary
             (x-ibm-flow-execution-summary header). Defaults to false server-side.
+        retries:
+            Number of extra attempts after the first one fails (default 0, i.e.
+            no retry - single attempt, previous behaviour). Set to an integer to
+            auto-retry whenever a call fails for any reason, including hitting
+            ``request_timeout``. Values below 0 and non-integers are treated as 0.
+            HTTP 4xx responses (bad flow_id, bad input, expired token, ...) are
+            capped at a single retry no matter how high ``retries`` is, since
+            repeating an identical rejected request rarely helps; when ``retries``
+            is 0 they are not retried at all.
+        retry_delay:
+            Seconds to wait between attempts (default 0.0). Ignored when
+            ``retries`` resolves to 0.
 
         Returns
         -------
-        The flow output dict on success, None on failure or missing client.
+        The flow output dict on success, None once every attempt has failed or
+        the client is missing.
         """
         wxo_client = self.client
         if not wxo_client:
@@ -1182,36 +1201,77 @@ class InferenceClient:
         if not flow_id:
             print("run_wxo_flow: flow_id is required")
             return None
+
         try:
-            url = f"{wxo_client['base_url']}/flows/{flow_id}/run"
+            max_retries = max(int(retries), 0)
+        except (TypeError, ValueError):
+            print(f"run_wxo_flow: retries must be an integer, got {retries!r}. Using 0.")
+            max_retries = 0
 
-            headers = dict(wxo_client["headers"])
-            if thread_id is not None:
-                headers["x-ibm-thread-id"] = thread_id
-            if environment_id is not None:
-                headers["x-ibm-environment-id"] = environment_id
-            if agent_id is not None:
-                headers["x-ibm-agent-id"] = agent_id
-            if agent_version is not None:
-                headers["x-ibm-agent-version"] = agent_version
-            if execution_summary is not None:
-                headers["x-ibm-flow-execution-summary"] = str(execution_summary).lower()
+        url = f"{wxo_client['base_url']}/flows/{flow_id}/run"
 
-            params = {"request_timeout": request_timeout}
+        headers = dict(wxo_client["headers"])
+        if thread_id is not None:
+            headers["x-ibm-thread-id"] = thread_id
+        if environment_id is not None:
+            headers["x-ibm-environment-id"] = environment_id
+        if agent_id is not None:
+            headers["x-ibm-agent-id"] = agent_id
+        if agent_version is not None:
+            headers["x-ibm-agent-version"] = agent_version
+        if execution_summary is not None:
+            headers["x-ibm-flow-execution-summary"] = str(execution_summary).lower()
 
-            response = requests.post(
-                url,
-                headers=headers,
-                params=params,
-                json=flow_input or {},
-                verify=certifi.where(),
-                **kwargs,
-            )
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            print(f"run_wxo_flow error: {e}")
-            return None
+        params = {"request_timeout": request_timeout}
+
+        # Give requests its own deadline so a stalled call raises (and can be
+        # retried) rather than hanging past the flow's own timeout budget.
+        kwargs.setdefault("timeout", (request_timeout / 1000) + 5)
+
+        total_attempts = max_retries + 1
+        for attempt in range(1, total_attempts + 1):
+            try:
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    params=params,
+                    json=flow_input or {},
+                    verify=certifi.where(),
+                    **kwargs,
+                )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                # A 4xx means the server rejected the request itself, so repeating
+                # it verbatim is unlikely to help - allow one retry at most.
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                is_client_error = status is not None and 400 <= status < 500
+                allowed_attempts = (
+                    min(total_attempts, 2) if is_client_error else total_attempts
+                )
+
+                if attempt < allowed_attempts:
+                    print(
+                        f"run_wxo_flow error (attempt {attempt}/{allowed_attempts}): {e} "
+                        f"- retrying{f' in {retry_delay}s' if retry_delay else ''}"
+                    )
+                    if retry_delay:
+                        import time
+
+                        time.sleep(retry_delay)
+                    continue
+
+                if total_attempts > 1:
+                    capped = " - HTTP 4xx, capped at 1 retry" if is_client_error else ""
+                    print(
+                        f"run_wxo_flow error (attempt {attempt}/{allowed_attempts}, "
+                        f"giving up{capped}): {e}"
+                    )
+                else:
+                    print(f"run_wxo_flow error: {e}")
+                return None
+
+        return None
 
     # ---------------------------------------------------------------------------
     # Iterative inference loop

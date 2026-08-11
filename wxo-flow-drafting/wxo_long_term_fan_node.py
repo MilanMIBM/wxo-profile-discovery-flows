@@ -90,19 +90,23 @@ def _():
     return
 
 
-@app.cell
-def _():
-    rewrite_tables = os.getenv("REWRITE_TABLES", False)
-    return (rewrite_tables,)
-
-
 @app.cell(hide_code=True)
-def _(postgresql_engine, rewrite_tables):
+def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    TABLES_DIR = "src/data/tables"
+    # Drop existing tables before reloading them from CSV. Compare the string, since
+    # bool("False") is True.
+    rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
+    print(f"Rewrite tables: {rewrite_tables}")
+
+    TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
+
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
+    # in the directory and it gets loaded without touching this cell.
+    table_csvs = sorted(TABLES_DIR.glob("*.csv"))
+    print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
     # Columns stored in the CSV as JSON-array strings ('["a","b"]') that should land in Postgres as native jsonb (real lists) rather than plain text.
     JSON_COLUMNS = {
@@ -118,15 +122,22 @@ def _(postgresql_engine, rewrite_tables):
         s = str(val).strip()
         return json.loads(s) if s else None
 
-    for name in ["quiz_structure", "quiz_meta", "quiz_scoring", "quiz_details"]:
-        if name in existing and rewrite_tables:
+    for csv_path in table_csvs:
+        name = csv_path.stem
+
+        # Missing tables are always created; existing ones are only rebuilt when rewrite_tables is set, so a partial set fills in the gaps.
+        if name in existing and not rewrite_tables:
+            print(f"{name}: already exists, skipping (rewrite_tables is False)")
+            continue
+
+        if name in existing:
             print(f"{name}: dropping existing table")
-            with postgresql_engine.connect() as connection:
+
+            with postgresql_engine.begin() as connection:
                 connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
-        # Always recreate the table, even if it already exists
-        df = pd.read_csv(f"{TABLES_DIR}/{name}.csv")
+        df = pd.read_csv(csv_path)
         dtype = {}
         for col in JSON_COLUMNS.get(name, []):
             if col in df.columns:
@@ -136,7 +147,7 @@ def _(postgresql_engine, rewrite_tables):
             name,
             postgresql_engine,
             index=False,
-            if_exists="replace",
+            if_exists="fail",
             dtype=dtype,
         )
         print(f"{name}: created, loaded {len(df)} rows")
@@ -300,7 +311,9 @@ def _(user_emails):
 def _(quiz_ids_unique):
     quiz_id_list = quiz_ids_unique.quiz_id.to_list()
     select_quiz_id = mo.ui.dropdown(
-        label="**Select Quiz ID :**", options=quiz_id_list, value=quiz_id_list[0]
+        label="**Select Quiz ID :**",
+        options=quiz_id_list,
+        value=quiz_id_list[0],
     )
     # select_quiz_id
     return

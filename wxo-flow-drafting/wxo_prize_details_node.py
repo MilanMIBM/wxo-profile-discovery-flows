@@ -76,18 +76,22 @@ def _():
 
 
 @app.cell
-def _():
-    rewrite_tables = os.getenv("REWRITE_TABLES", False)
-    return (rewrite_tables,)
-
-
-@app.cell
-def _(postgresql_engine, rewrite_tables):
+def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    TABLES_DIR = "src/data/tables"
+    # Drop existing tables before reloading them from CSV. Compare the string, since
+    # bool("False") is True.
+    rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
+    print(f"Rewrite tables: **{rewrite_tables}**")
+
+    TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
+
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
+    # in the directory and it gets loaded without touching this cell.
+    table_csvs = sorted(TABLES_DIR.glob("*.csv"))
+    print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
     # Columns stored in the CSV as JSON-array strings ('["a","b"]') that should land in Postgres as native jsonb (real lists) rather than plain text.
     JSON_COLUMNS = {
@@ -103,15 +107,24 @@ def _(postgresql_engine, rewrite_tables):
         s = str(val).strip()
         return json.loads(s) if s else None
 
-    for name in ["quiz_structure", "quiz_meta", "quiz_scoring", "quiz_details"]:
-        if name in existing and rewrite_tables:
+    for csv_path in table_csvs:
+        name = csv_path.stem
+
+        # Missing tables are always created; existing ones are only rebuilt when rewrite_tables is set, so a partial set fills in the gaps.
+        if name in existing and not rewrite_tables:
+            print(f"{name}: already exists, skipping (rewrite_tables is False)")
+            continue
+
+        if name in existing:
             print(f"{name}: dropping existing table")
-            with postgresql_engine.connect() as connection:
-                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
+
+            with postgresql_engine.begin() as connection:
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
+                )
             existing.remove(name)
 
-        # Always recreate the table, even if it already exists
-        df = pd.read_csv(f"{TABLES_DIR}/{name}.csv")
+        df = pd.read_csv(csv_path)
         dtype = {}
         for col in JSON_COLUMNS.get(name, []):
             if col in df.columns:
@@ -121,7 +134,7 @@ def _(postgresql_engine, rewrite_tables):
             name,
             postgresql_engine,
             index=False,
-            if_exists="replace",
+            if_exists="fail",
             dtype=dtype,
         )
         print(f"{name}: created, loaded {len(df)} rows")
@@ -247,6 +260,9 @@ class PrizePageContent(BaseModel):
     page_content: str = Field(
         description="""Raw converted page content (Markdown or plain text) for a single prize page, as produced by the fetch_url_data tool."""
     )
+    output_language: str = Field(
+        description="Desired generated output language.", default="eng"
+    )
 
 
 @app.function
@@ -260,7 +276,7 @@ def build_prompt_extract_prize_details(aflow: Flow) -> PromptNode:
     | Elements to Preserve |: what the product, experience or subject is, model and variant names, materials and construction, dimensions, weight, capacity, power, performance figures, technical and compatibility details, certifications, included contents, available sizes and colours. 
     | Elements to Drop |: navigation, menus, breadcrumbs, cookie and consent banners, legal and privacy text, pricing, stock and delivery information, promotions and discounts, customer reviews and ratings, social and sharing links, newsletter signups, related or recommended alternative products, company and brand marketing copy, and any other page furniture.
 
-Preserve the original wording of specs rather than paraphrasing. Do not add headings, commentary, or preamble. If the text contains no prize specifications, or begins with 'ERROR:' return 'No Text'. The ideal output is a paragraph of text.""",
+Preserve the original wording of specs rather than paraphrasing. Do not add headings, commentary, or preamble. If the text contains no prize specifications, or begins with 'ERROR:' return 'No Text'. The ideal output is a paragraph of text. Desired output language: {self.input.output_language}""",
         ],
         user_prompt=[
             """Fetched prize webpage content:
@@ -314,7 +330,9 @@ def _():
 class PrizeInfo(BaseModel):
     brand_name: str = Field(description="Brand that provides the prize.")
     prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(description="Free-text description of the prize.")
+    prize_description: str = Field(
+        description="Free-text description of the prize."
+    )
     generated_description: str = Field(
         default="",
         description="Optional cleaned or generated prize description containing only specification-related content.",
@@ -328,7 +346,12 @@ class PrizeInfo(BaseModel):
     tag_type: str = Field(
         description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
     )
-    number_of_tags: int = Field(description="How many metadata tags to generate.")
+    number_of_tags: int = Field(
+        description="How many metadata tags to generate."
+    )
+    output_language: str = Field(
+        description="Desired generated output language.", default="eng"
+    )
 
 
 @app.function
@@ -338,7 +361,7 @@ def build_prompt_metadata_tag_generation(aflow: Flow) -> PromptNode:
         display_name="prize_metadata_tag_generation",
         description="Use data about the prize to generate metadata tags as additional descriptors.",
         system_prompt=[
-            """Generate {self.input.number_of_tags} metadata tags related to the provided prize. Generate tags that match the following descriptor: {self.input.tag_type}. If there is no prize description, return only one tag - 'not_enough_data'."""
+            """Generate {self.input.number_of_tags} metadata tags related to the provided prize. Generate tags that match the following descriptor: {self.input.tag_type}. If there is no prize description, return only one tag - 'not_enough_data'. Desired output language: {self.input.output_language}"""
         ],
         user_prompt=[
             """Brand Name: {self.input.brand_name}
@@ -380,7 +403,9 @@ class MetadataTags(BaseModel):
     class Tags(BaseModel):
         metadata_tags: list[str] = Field(description="Output tags.")
 
-    tags: Tags = Field(description="Object wrapper for the metadata tag output.")
+    tags: Tags = Field(
+        description="Object wrapper for the metadata tag output."
+    )
 
 
 @app.cell(column=2, hide_code=True)
@@ -393,7 +418,9 @@ def _():
 
 @app.cell
 def _(run_tests, select_prize_url):
-    mo.hstack([select_prize_url, run_tests], justify="space-around", align="center")
+    mo.hstack(
+        [select_prize_url, run_tests], justify="space-around", align="center"
+    )
     return
 
 
@@ -416,7 +443,9 @@ def _(run_tests, test_url_fetch):
 
 @app.cell
 def _(url_contents):
-    mo.md(url_contents.content["documents"][0]) if url_contents is not None else None
+    mo.md(
+        url_contents.content["documents"][0]
+    ) if url_contents is not None else None
     return
 
 

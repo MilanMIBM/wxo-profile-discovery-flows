@@ -94,19 +94,23 @@ def _():
     return
 
 
-@app.cell
-def _():
-    rewrite_tables = os.getenv("REWRITE_TABLES", False)
-    return (rewrite_tables,)
-
-
 @app.cell(hide_code=True)
-def _(postgresql_engine, rewrite_tables):
+def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    TABLES_DIR = "src/data/tables"
+    # Drop existing tables before reloading them from CSV. Compare the string, since
+    # bool("False") is True.
+    rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
+    print(f"Rewrite tables: {rewrite_tables}")
+
+    TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
+
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
+    # in the directory and it gets loaded without touching this cell.
+    table_csvs = sorted(TABLES_DIR.glob("*.csv"))
+    print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
     # Columns stored in the CSV as JSON-array strings ('["a","b"]') that should land in Postgres as native jsonb (real lists) rather than plain text.
     JSON_COLUMNS = {
@@ -122,17 +126,22 @@ def _(postgresql_engine, rewrite_tables):
         s = str(val).strip()
         return json.loads(s) if s else None
 
-    for name in ["quiz_structure", "quiz_meta", "quiz_scoring", "quiz_details"]:
-        if name in existing and rewrite_tables:
+    for csv_path in table_csvs:
+        name = csv_path.stem
+
+        # Missing tables are always created; existing ones are only rebuilt when rewrite_tables is set, so a partial set fills in the gaps.
+        if name in existing and not rewrite_tables:
+            print(f"{name}: already exists, skipping (rewrite_tables is False)")
+            continue
+
+        if name in existing:
             print(f"{name}: dropping existing table")
-            with postgresql_engine.connect() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+
+            with postgresql_engine.begin() as connection:
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
-        # Always recreate the table, even if it already exists
-        df = pd.read_csv(f"{TABLES_DIR}/{name}.csv")
+        df = pd.read_csv(csv_path)
         dtype = {}
         for col in JSON_COLUMNS.get(name, []):
             if col in df.columns:
@@ -142,7 +151,7 @@ def _(postgresql_engine, rewrite_tables):
             name,
             postgresql_engine,
             index=False,
-            if_exists="replace",
+            if_exists="fail",
             dtype=dtype,
         )
         print(f"{name}: created, loaded {len(df)} rows")
@@ -164,9 +173,7 @@ def _():
 
 @app.cell
 def _(retrieve_number, select_account):
-    filter_stack = mo.hstack(
-        [select_account, retrieve_number], justify="space-around"
-    )
+    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
     return (filter_stack,)
 
 
@@ -320,11 +327,7 @@ def _(quiz_ids_unique):
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = (
-        df.to_dicts()
-        if hasattr(df, "to_dicts")
-        else df.to_dict(orient="records")
-    )
+    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
@@ -349,16 +352,10 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return (
-                None
-                if val != val or val in (float("inf"), float("-inf"))
-                else val
-            )
+            return None if val != val or val in (float("inf"), float("-inf")) else val
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(
-            val, (datetime.datetime, datetime.date, datetime.time)
-        ):
+        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -542,8 +539,7 @@ def build_respondent_profiles(flow, self, parent, json):
                     "email": email,
                     "anonymous": as_bool(s.get("anonymous")),
                     "is_owner": as_bool(s.get("is_owner")),
-                    "placeholder_email": bool(email)
-                    and email.startswith("temp@"),
+                    "placeholder_email": bool(email) and email.startswith("temp@"),
                 },
                 "quiz_index": {},
                 "quizzes": [],
@@ -611,9 +607,7 @@ def build_respondent_profiles(flow, self, parent, json):
         for q in prof["quizzes"]:
             answered = q["correct"] + q["incorrect"]
             q["answered"] = answered
-            q["accuracy"] = (
-                round(q["correct"] / answered, 4) if answered > 0 else None
-            )
+            q["accuracy"] = round(q["correct"] / answered, 4) if answered > 0 else None
         prof["quizzes_num"] = len(prof["quizzes"])
         prof["context_record_id"] = (
             identifier if identifier is not None else prof["respondent_id"]
@@ -663,8 +657,7 @@ def _():
 
         def as_dict(self):
             return {
-                k: v.as_dict() if isinstance(v, _Bag) else v
-                for k, v in self.items()
+                k: v.as_dict() if isinstance(v, _Bag) else v for k, v in self.items()
             }
 
     def _bag(data=None):
@@ -699,9 +692,7 @@ def _():
 @app.cell
 def _(make_sandbox, run_tests, test_flow):
     if run_tests.value:
-        build_sandbox = make_sandbox(
-            {"input": {"identifier": None, **test_flow}}
-        )
+        build_sandbox = make_sandbox({"input": {"identifier": None, **test_flow}})
         build_respondent_profiles.run(**build_sandbox)
         result = {
             "base_profiles": build_sandbox["self"].output.base_profiles,
@@ -759,9 +750,7 @@ def _(result, run_tests, select_user):
 
 @app.cell
 def _(num_profiles, result):
-    mo.accordion(
-        {f"Full Results List (**Profile count: {num_profiles}**)": result}
-    )
+    mo.accordion({f"Full Results List (**Profile count: {num_profiles}**)": result})
     return
 
 

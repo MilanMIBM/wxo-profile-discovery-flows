@@ -3,6 +3,7 @@ ty
 ruff
 pandas
 requests
+anywidget
 marimo[mcp]
 psycopg2-binary
 python-lsp-server
