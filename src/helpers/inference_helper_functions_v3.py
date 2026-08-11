@@ -938,7 +938,7 @@ class InferenceClient:
             try:
                 uuid.UUID(str(value))
                 return True
-            except (ValueError, AttributeError, TypeError):
+            except ValueError, AttributeError, TypeError:
                 return False
 
         tool_types = list(tool_types) if tool_types else []
@@ -1134,7 +1134,7 @@ class InferenceClient:
         self,
         flow_id: str,
         flow_input: Optional[Dict[str, Any]] = None,
-        request_timeout: int = 60000,
+        request_timeout: int = 120000,
         thread_id: Optional[str] = None,
         environment_id: Optional[str] = None,
         agent_id: Optional[str] = None,
@@ -1159,7 +1159,7 @@ class InferenceClient:
             The input defined by the flow model, sent as the JSON request body.
             Defaults to an empty object.
         request_timeout:
-            The flow request timeout in milliseconds (query param, default 60000).
+            The flow request timeout in milliseconds (query param, default 120000).
             Also used to derive the client-side socket timeout (this value in
             seconds, plus a 5s grace so a server-side timeout response wins when
             possible) so a stalled call raises instead of hanging forever.
@@ -1204,8 +1204,10 @@ class InferenceClient:
 
         try:
             max_retries = max(int(retries), 0)
-        except (TypeError, ValueError):
-            print(f"run_wxo_flow: retries must be an integer, got {retries!r}. Using 0.")
+        except TypeError, ValueError:
+            print(
+                f"run_wxo_flow: retries must be an integer, got {retries!r}. Using 0."
+            )
             max_retries = 0
 
         url = f"{wxo_client['base_url']}/flows/{flow_id}/run"
@@ -1226,7 +1228,7 @@ class InferenceClient:
 
         # Give requests its own deadline so a stalled call raises (and can be
         # retried) rather than hanging past the flow's own timeout budget.
-        kwargs.setdefault("timeout", (request_timeout / 1000) + 5)
+        kwargs.setdefault("timeout", (request_timeout / 1000) + 15)
 
         total_attempts = max_retries + 1
         for attempt in range(1, total_attempts + 1):

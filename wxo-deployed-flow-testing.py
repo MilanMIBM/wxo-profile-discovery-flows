@@ -282,7 +282,7 @@ def _():
         start=0,
         stop=1000,
         step=1,
-        value=20,
+        value=2,
     )
     # retrieve_number
     return (retrieve_number,)
@@ -508,6 +508,11 @@ def _(filter_stack):
 
 
 @app.cell
+def _():
+    return
+
+
+@app.cell
 def _(test_stack):
     test_stack
     return
@@ -520,6 +525,7 @@ def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
             flow_id=flow_selection_dropdown.value,
             flow_input=test_flow,
             execution_summary=True,
+            retries=1
         )
     else:
         flow_result = {}
