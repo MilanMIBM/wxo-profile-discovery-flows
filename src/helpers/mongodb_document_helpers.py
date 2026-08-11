@@ -16,11 +16,19 @@ no default database, so pass ``db_name`` there).
 
 Uploads can be made idempotent with ``check_for_existing``: name the field that
 identifies a document and already-present documents are skipped instead of
-duplicated, or refreshed in place with ``on_existing="update"``::
+duplicated, refreshed in place with ``on_existing="update"``, or replaced
+wholesale with ``on_existing="overwrite"``::
 
     upload_documents(mongodb, "quiz_meta", docs, check_for_existing="quiz_id")
     upload_documents(mongodb, "quiz_meta", docs,
                 check_for_existing="quiz_id", on_existing="update")
+    upload_documents(mongodb, "quiz_meta", docs,
+                check_for_existing="quiz_id", on_existing="overwrite")
+
+``"update"`` merges the incoming fields into the stored document and leaves its
+other fields alone; ``"overwrite"`` re-uploads the document as given, so stored
+fields the incoming document does not carry are dropped (the stored ``_id`` is
+kept either way).
 """
 
 from __future__ import annotations
@@ -30,7 +38,7 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
 
 import uuid
 
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient, ReplaceOne, UpdateOne
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import BulkWriteError, ConfigurationError
@@ -218,9 +226,44 @@ def _build_update_operations(
     return operations
 
 
+def _build_replace_operations(
+    docs: List[Dict[str, Any]],
+    keys: List[str],
+    upsert: bool,
+    collection: str,
+) -> List[ReplaceOne]:
+    """Turn documents into ``ReplaceOne`` ops filtered on their own *keys* fields.
+
+    Unlike :func:`_build_update_operations`, the stored document is replaced
+    wholesale: fields it holds that the incoming document does not are dropped.
+    ``_id`` is stripped from the replacement so the stored document keeps its
+    own id (MongoDB rejects a replacement that alters ``_id``).
+
+    Raises:
+        ValueError: When a document lacks one of *keys*.
+    """
+    operations: List[ReplaceOne] = []
+    for i, doc in enumerate(docs):
+        missing = [key for key in keys if key not in doc]
+        if missing:
+            raise ValueError(
+                f"Document at index {i} is missing {missing}, required to match "
+                f"an existing document in '{collection}'."
+            )
+        replacement = {k: v for k, v in doc.items() if k != "_id"}
+        operations.append(
+            ReplaceOne(
+                {key: doc[key] for key in keys},
+                replacement,
+                upsert=upsert,
+            )
+        )
+    return operations
+
+
 def _run_bulk_update(
     target: Collection,
-    operations: List[UpdateOne],
+    operations: Sequence[Union[UpdateOne, ReplaceOne]],
     batch_size: int,
     verbose: bool = False,
 ) -> Dict[str, Any]:
@@ -378,16 +421,20 @@ def upload_document(
             does not carry the field.
         on_existing: What to do when a match is found — ``"skip"`` (default)
             leaves the stored document untouched, ``"update"`` overwrites its
-            fields with the ones from *doc*.
+            fields with the ones from *doc*, ``"overwrite"`` replaces the stored
+            document wholesale so fields absent from *doc* are dropped.
         db_name: Database name; defaults to the URI's default database.
         clean: Run the document through :func:`clean_document` first.
 
     Returns:
-        ``{"id": str | None, "ok": bool, "action": "inserted" | "skipped" | "updated"}``.
-        ``id`` is None for an update matched on a field other than ``_id``.
+        ``{"id": str | None, "ok": bool, "action": "inserted" | "skipped" |
+        "updated" | "overwritten"}``. ``id`` is None for an update matched on a
+        field other than ``_id``.
     """
-    if on_existing not in ("skip", "update"):
-        raise ValueError("on_existing must be either 'skip' or 'update'.")
+    if on_existing not in ("skip", "update", "overwrite"):
+        raise ValueError(
+            "on_existing must be one of 'skip', 'update' or 'overwrite'."
+        )
 
     payload = clean_document(doc) if clean else dict(doc)
     target = _resolve_collection(mongodb, collection, db_name)
@@ -400,6 +447,14 @@ def upload_document(
                     "id": str(payload.get("_id")) if "_id" in payload else None,
                     "ok": True,
                     "action": "skipped",
+                }
+            if on_existing == "overwrite":
+                replacement = {k: v for k, v in payload.items() if k != "_id"}
+                target.replace_one(selector, replacement)
+                return {
+                    "id": str(payload["_id"]) if "_id" in payload else None,
+                    "ok": True,
+                    "action": "overwritten",
                 }
             update_data = {k: v for k, v in payload.items() if k != check_for_existing}
             if not update_data:
@@ -446,8 +501,10 @@ def upload_documents(
             document is inserted as-is.
         on_existing: What to do with documents that already exist —
             ``"skip"`` (default) leaves them untouched, ``"update"`` overwrites
-            their fields with the incoming values. Only meaningful alongside
-            *check_for_existing*.
+            their fields with the incoming values, ``"overwrite"`` replaces each
+            stored document wholesale with the incoming one, so fields it holds
+            that the incoming document does not are dropped. Only meaningful
+            alongside *check_for_existing*.
         batch_size: Documents per ``insert_many`` / ``bulk_write`` call.
             Defaults to 100.
         db_name: Database name; defaults to the URI's default database.
@@ -457,10 +514,10 @@ def upload_documents(
         verbose: Print per-batch progress.
 
     Returns:
-        ``{"inserted": int, "skipped": int, "updated": int, "matched": int,
-        "ids": [str, ...], "errors": [str, ...]}``. With ``ordered=False`` a
-        duplicate-key or invalid document fails only that document; the error
-        text is collected instead of raised.
+        ``{"inserted": int, "skipped": int, "updated": int, "overwritten": int,
+        "matched": int, "ids": [str, ...], "errors": [str, ...]}``. With
+        ``ordered=False`` a duplicate-key or invalid document fails only that
+        document; the error text is collected instead of raised.
 
     Note:
         The existence check and the insert are separate operations, so a
@@ -468,8 +525,10 @@ def upload_documents(
         index on the *check_for_existing* field is what makes that impossible;
         this check keeps a re-run from duplicating its own earlier upload.
     """
-    if on_existing not in ("skip", "update"):
-        raise ValueError("on_existing must be either 'skip' or 'update'.")
+    if on_existing not in ("skip", "update", "overwrite"):
+        raise ValueError(
+            "on_existing must be one of 'skip', 'update' or 'overwrite'."
+        )
 
     payload = _as_doc_list(docs)
     if not payload:
@@ -485,7 +544,11 @@ def upload_documents(
             target, payload, check_for_existing, batch_size
         )
         if verbose and existing_docs:
-            verb = "skipping" if on_existing == "skip" else "updating"
+            verb = {
+                "skip": "skipping",
+                "update": "updating",
+                "overwrite": "overwriting",
+            }[on_existing]
             print(
                 f"{len(existing_docs)} document(s) already in '{collection}' "
                 f"by '{check_for_existing}' - {verb}"
@@ -510,6 +573,7 @@ def upload_documents(
         "inserted": len(inserted_ids),
         "skipped": 0,
         "updated": 0,
+        "overwritten": 0,
         "matched": 0,
         "ids": inserted_ids,
         "errors": errors,
@@ -519,18 +583,25 @@ def upload_documents(
         if on_existing == "skip":
             summary["skipped"] = len(existing_docs)
         else:
-            operations = _build_update_operations(
+            builder = (
+                _build_replace_operations
+                if on_existing == "overwrite"
+                else _build_update_operations
+            )
+            operations = builder(
                 existing_docs, [check_for_existing], upsert=False, collection=collection
             )
-            update_result = _run_bulk_update(target, operations, batch_size, verbose)
-            summary["updated"] = update_result["modified"]
-            summary["matched"] = update_result["matched"]
-            summary["errors"].extend(update_result["errors"])
+            write_result = _run_bulk_update(target, operations, batch_size, verbose)
+            key = "overwritten" if on_existing == "overwrite" else "updated"
+            summary[key] = write_result["modified"]
+            summary["matched"] = write_result["matched"]
+            summary["errors"].extend(write_result["errors"])
 
     if verbose:
         print(
             f"'{collection}': {summary['inserted']} inserted, "
-            f"{summary['skipped']} skipped, {summary['updated']} updated"
+            f"{summary['skipped']} skipped, {summary['updated']} updated, "
+            f"{summary['overwritten']} overwritten"
         )
 
     return summary

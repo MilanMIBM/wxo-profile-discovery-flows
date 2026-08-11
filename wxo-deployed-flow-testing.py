@@ -525,7 +525,7 @@ def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
             flow_id=flow_selection_dropdown.value,
             flow_input=test_flow,
             execution_summary=True,
-            retries=1
+            retries=1,
         )
     else:
         flow_result = {}
@@ -563,8 +563,17 @@ def _():
     import_documents_to_mongodb = mo.ui.run_button(
         label="**Import output records into MongoDB**"
     )
-    import_documents_to_mongodb
     return (import_documents_to_mongodb,)
+
+
+@app.cell
+def _(import_documents_to_mongodb, on_existing_documents):
+    mo.hstack(
+        [import_documents_to_mongodb, on_existing_documents],
+        justify="start",
+        gap=3,
+    )
+    return
 
 
 @app.cell
@@ -575,19 +584,30 @@ def _(flow_selection_dropdown):
 
 
 @app.cell
+def _():
+    on_existing_documents = mo.ui.dropdown(
+        label="**On existing document:**",
+        options=["update", "overwrite", "skip"],
+        value="overwrite",
+    )
+    return (on_existing_documents,)
+
+
+@app.cell
 def _(
     flow_result,
     import_documents_to_mongodb,
     mongodb,
     mongodb_collection_name,
+    on_existing_documents,
 ):
     if import_documents_to_mongodb.value and flow_result:
         mongodb_import_docs = upload_documents(
             mongodb,
             mongodb_collection_name,
-            flow_result.get("rows") or [],
+            flow_result.get("enriched_profiles") or [],
             check_for_existing="respondent_id",
-            on_existing="update",
+            on_existing=str(on_existing_documents.value) or "overwrite",
             clean=True,
             verbose=True,
         )
