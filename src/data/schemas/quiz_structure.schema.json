@@ -33,12 +33,12 @@
       "minLength": 1
     },
     "language": {
-      "description": "ISO 639-2/B three-letter language code of the quiz.",
+      "description": "Full language name or an ISO 639-2/B three-letter language code of the quiz.",
       "type": "string",
       "enum": [
+        "English",
+        "Norwegian",
         "eng",
-        "est",
-        "lav",
         "lit",
         "nor",
         "pol"

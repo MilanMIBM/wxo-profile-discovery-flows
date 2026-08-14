@@ -245,7 +245,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_structure,)
 
@@ -259,7 +259,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_details,)
 
@@ -273,7 +273,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_scoring,)
 
@@ -285,7 +285,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (account_ids_unique,)
 
@@ -317,7 +317,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "prize.prize_name", "prize.prize_url" FROM "quiz_meta" WHERE "prize.prize_url" IS NOT NULL
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (prize_urls,)
 

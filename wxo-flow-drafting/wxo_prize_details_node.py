@@ -284,7 +284,8 @@ Preserve the original wording of specs rather than paraphrasing. Do not add head
 
 {self.input.page_content}
 
----"""
+---
+Desired output language: {self.input.output_language}"""
         ],
         llm="groq/openai/gpt-oss-120b",
         llm_parameters={
@@ -373,7 +374,8 @@ Prize Description:
 {self.input.prize_description}
 {self.input.generated_description}
 
----"""
+---
+Desired output language: {self.input.output_language}"""
         ],
         llm="groq/openai/gpt-oss-120b",
         llm_parameters={
