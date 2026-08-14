@@ -31,6 +31,9 @@ with app.setup:
     from ibm_watsonx_orchestrate.flow_builder.flows import Flow
     from ibm_watsonx_orchestrate.flow_builder.node import PromptNode
     from ibm_watsonx_orchestrate.agent_builder.tools import tool
+    from ibm_watsonx_orchestrate.agent_builder.tools.types import (
+        ToolResponseBody,
+    )
 
 
 @app.cell
@@ -119,7 +122,9 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
+                )
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -145,7 +150,7 @@ def _(postgresql_engine):
         f"""
         SELECT DISTINCT "prize.prize_name", "prize.prize_url" FROM "quiz_meta" WHERE "prize.prize_url" IS NOT NULL
         """,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (prize_urls,)
 
@@ -181,33 +186,50 @@ def _():
     return
 
 
+@app.class_definition
+### fetch_url_data - Output Schema
+class FetchUrlDataOutput(BaseModel):
+    """The converted documents, one string per requested URL."""
+
+    documents: List[str] = Field(
+        ...,
+        description="""The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.""",
+    )
+
+
 @app.function
 @tool(
     name="fetch_url_data",
     display_name="Fetch URL Data",
     description="""Fetches one or more URLs and converts each document into Markdown or plain text using Docling. Use this to read the contents of a web page or an online document (PDF, DOCX, PPTX, HTML) so the text can be summarized or analyzed.""",
-    output_schema={
-        "description": "The converted documents, one string per requested URL.",
-        "properties": {
-            "documents": {
-                "description": "The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.",
-                "items": {"type": "string"},
-                "title": "Documents",
-                "type": "array",
-            }
-        },
-        "required": ["documents"],
-        "title": "FetchUrlDataOutput",
-        "type": "object",
-    },
+    enable_dynamic_input_schema=True,
+    enable_dynamic_output_schema=True,
+    # Wrapped in ToolResponseBody rather than passed as a bare dict: @tool declares this parameter as that type, and a raw dict is stored unvalidated, so pydantic warns "Expected ToolResponseBody" whenever the spec is later serialized. Constructing it here validates the schema at definition time instead.
+    #     output_schema=ToolResponseBody.model_validate(
+    #         {
+    #             "description": "The converted documents, one string per requested URL.",
+    #             "properties": {
+    #                 "documents": {
+    #                     "description": "The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.",
+    #                     "items": {"type": "string"},
+    #                     "title": "Documents",
+    #                     "type": "array",
+    #                 }
+    #             },
+    #             "required": ["documents"],
+    #             "title": "FetchUrlDataOutput",
+    #             "type": "object",
+    #         }
+    #     ),
 )
 def fetch_url_data(
-    urls: Union[str, List[str]],
+    urls: List[str],
     return_markdown_output: bool = True,
-) -> dict:
+) -> FetchUrlDataOutput:
     # ///
     # dependencies = [
-    #     "docling==2.55.1",
+    #     "docling==2.120.1",
+    #     "pydantic==2.13.4",
     # ]
     # ///
     """Fetches and converts the content of one or more URLs using Docling.
@@ -218,19 +240,23 @@ def fetch_url_data(
     does not abort the others; that entry is an 'ERROR: ...' string instead.
 
     Args:
-        urls (Union[str, List[str]]): A single URL or a list of URLs to fetch and convert.
+        urls (List[str]): The URLs to fetch and convert. A bare string is also
+            accepted and treated as a one-element list, but the declared schema
+            is a list so callers and agents see a single unambiguous shape.
         return_markdown_output (bool): True (default) to export Markdown, False for plain text.
 
     Returns:
-        dict: {"documents": [...]} - the converted content, one string per requested URL.
+        FetchUrlDataOutput: The converted content, one string per requested URL.
     """
     from docling.document_converter import DocumentConverter
+    from typing import List
 
+    # Declared as List[str], but normalised defensively: the annotation drives the
+    # schema, this line survives a caller that sends a bare string anyway.
     url_list: List[str] = [urls] if isinstance(urls, str) else list(urls)
 
     converter = DocumentConverter()
-    documents: List[str] = []
-
+    documents = []
     for url in url_list:
         try:
             result = converter.convert(url)
@@ -244,7 +270,7 @@ def fetch_url_data(
                 f"ERROR: {url} could not be converted - {type(exc).__name__}: {exc}"
             )
 
-    return {"documents": documents}
+    return FetchUrlDataOutput(documents=documents)
 
 
 @app.cell(hide_code=True)
@@ -334,7 +360,9 @@ def _():
 class PrizeInfo(BaseModel):
     brand_name: str = Field(description="Brand that provides the prize.")
     prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(description="Free-text description of the prize.")
+    prize_description: str = Field(
+        description="Free-text description of the prize."
+    )
     generated_description: str = Field(
         default="",
         description="Optional cleaned or generated prize description containing only specification-related content.",
@@ -348,7 +376,9 @@ class PrizeInfo(BaseModel):
     tag_type: str = Field(
         description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
     )
-    number_of_tags: int = Field(description="How many metadata tags to generate.")
+    number_of_tags: int = Field(
+        description="How many metadata tags to generate."
+    )
     output_language: str = Field(
         description="Desired generated output language.", default="English"
     )
@@ -404,7 +434,9 @@ class MetadataTags(BaseModel):
     class Tags(BaseModel):
         metadata_tags: list[str] = Field(description="Output tags.")
 
-    tags: Tags = Field(description="Object wrapper for the metadata tag output.")
+    tags: Tags = Field(
+        description="Object wrapper for the metadata tag output."
+    )
 
 
 @app.cell(column=2, hide_code=True)
@@ -417,7 +449,15 @@ def _():
 
 @app.cell
 def _(run_tests, select_prize_url):
-    mo.hstack([select_prize_url, run_tests], justify="space-around", align="center")
+    mo.hstack(
+        [select_prize_url, run_tests], justify="space-around", align="center"
+    )
+    return
+
+
+@app.cell
+def _(select_prize_url):
+    select_prize_url.value
     return
 
 
@@ -440,7 +480,9 @@ def _(run_tests, test_url_fetch):
 
 @app.cell
 def _(url_contents):
-    mo.md(url_contents.content["documents"][0]) if url_contents is not None else None
+    mo.md(
+        url_contents.content.documents[0]
+    ) if url_contents is not None else None
     return
 
 

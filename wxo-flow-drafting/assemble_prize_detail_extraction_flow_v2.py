@@ -32,7 +32,10 @@ with app.setup:
     )
     from ibm_watsonx_orchestrate.flow_builder.types import ForeachPolicy
     from src.helpers.ensure_wxo_env import ensure_wxo_env
-    from src.helpers.tool_import import import_tools_to_wxo
+    from src.helpers.tool_import import (
+        import_tools_to_wxo,
+        resolve_tool_sources,
+    )
 
     wxo_env_status = ensure_wxo_env(env_file="config/.env", reactivate=True)
     print(wxo_env_status)
@@ -169,9 +172,7 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -206,9 +207,7 @@ def _():
 
 @app.cell
 def _(retrieve_number, select_account):
-    filter_stack = mo.hstack(
-        [select_account, retrieve_number], justify="space-around"
-    )
+    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
     # filter_stack
     return (filter_stack,)
 
@@ -343,11 +342,7 @@ def _(prize_urls):
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = (
-        df.to_dicts()
-        if hasattr(df, "to_dicts")
-        else df.to_dict(orient="records")
-    )
+    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
@@ -372,16 +367,10 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return (
-                None
-                if val != val or val in (float("inf"), float("-inf"))
-                else val
-            )
+            return None if val != val or val in (float("inf"), float("-inf")) else val
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(
-            val, (datetime.datetime, datetime.date, datetime.time)
-        ):
+        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -484,12 +473,8 @@ class PrizeItem(BaseModel):
     brand_tags: List[str] = Field(
         default_factory=list, description="Brand descriptor tags."
     )
-    language: Optional[str] = Field(
-        default=None, description="Language of the quiz."
-    )
-    prize_name: Optional[str] = Field(
-        default=None, description="Name of the prize."
-    )
+    language: Optional[str] = Field(default=None, description="Language of the quiz.")
+    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
     prize_url: Optional[str] = Field(
         default=None,
         description="Prize page url, or empty when the catalogue has none.",
@@ -669,12 +654,8 @@ def stage_prize_inputs(flow, self, parent, json):
     self.output.prize_currency = prize.get("prize_currency") or ""
     self.output.language = prize.get("language") or ""
 
-    self.output.tag_type = (
-        flow["input"].get("tag_type") or "type, purpose, audience"
-    )
-    self.output.number_of_tags = int(
-        flow["input"].get("number_of_tags") or 8
-    )
+    self.output.tag_type = flow["input"].get("tag_type") or "type, purpose, audience"
+    self.output.number_of_tags = int(flow["input"].get("number_of_tags") or 8)
     self.output.preview_inputs = prize
 
 
@@ -757,11 +738,7 @@ def _():
         )
 
         tags_obj = parent.prize_metadata_tag_generation.output.tags or {}
-        tags = (
-            tags_obj.get("metadata_tags")
-            if isinstance(tags_obj, dict)
-            else None
-        )
+        tags = tags_obj.get("metadata_tags") if isinstance(tags_obj, dict) else None
         tags = [tag for tag in tags if tag] if isinstance(tags, list) else []
 
         self.output.quiz_id = prize.get("quiz_id")
@@ -796,9 +773,7 @@ class EnrichedPrizeOutput(BaseModel):
     quiz_id: Optional[str] = Field(
         default=None, description="Id of the quiz the prize belongs to."
     )
-    prize_name: Optional[str] = Field(
-        default=None, description="Name of the prize."
-    )
+    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
     prize_description: Optional[str] = Field(
         default=None,
         description="Original object prize description, if present.",
@@ -973,9 +948,7 @@ def _(PrizeTableOutputs):
 
             rows_out.append(
                 {
-                    "quiz_id": text(
-                        entry.get("quiz_id") or prize.get("quiz_id")
-                    ),
+                    "quiz_id": text(entry.get("quiz_id") or prize.get("quiz_id")),
                     "title": text(prize.get("title")),
                     "brand_name": text(prize.get("brand_name")),
                     "language": text(prize.get("language")),
@@ -986,9 +959,7 @@ def _(PrizeTableOutputs):
                     "prize_value": text(prize.get("prize_value")),
                     "prize_currency": text(prize.get("prize_currency")),
                     "prize_description": text(entry.get("prize_description")),
-                    "generated_description": text(
-                        entry.get("generated_description")
-                    ),
+                    "generated_description": text(entry.get("generated_description")),
                     "metadata_tags": tags(entry.get("metadata_tags")),
                     "brand_tags": tags(prize.get("brand_tags")),
                     "prize_type": tags(prize.get("prize_type")),
@@ -1050,12 +1021,8 @@ class EnrichedPrizeTableRow(BaseModel):
     brand_name: Optional[str] = Field(
         default=None, description="Brand that provides the prize."
     )
-    language: Optional[str] = Field(
-        default=None, description="Language of the quiz."
-    )
-    prize_name: Optional[str] = Field(
-        default=None, description="Name of the prize."
-    )
+    language: Optional[str] = Field(default=None, description="Language of the quiz.")
+    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
     prize_url: Optional[str] = Field(
         default=None,
         description="Prize page url, empty when the catalogue has none.",
@@ -1146,9 +1113,7 @@ class PrizeFlowOutput(BaseModel):
         default_factory=list,
         description="One flat row per prize, ready to load straight into a dataframe.",
     )
-    row_count: int = Field(
-        default=0, description="How many prize rows were produced."
-    )
+    row_count: int = Field(default=0, description="How many prize rows were produced.")
 
 
 @app.cell
@@ -1233,9 +1198,7 @@ def _(
 
         # Both sit OUTSIDE the loop. The collector reads the loop's aggregate rather
         # than shared state, which does not survive the parallel branch merge.
-        gather = collect_enriched_prizes(
-            aflow, output_schema=CollectedPrizesOutput
-        )
+        gather = collect_enriched_prizes(aflow, output_schema=CollectedPrizesOutput)
 
         table = build_prize_table(aflow)
 
@@ -1298,7 +1261,8 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
         aflow,
         path=FLOW_SPEC_PATH,
         dry_run=False,
-        tool_sources=TOOL_SOURCES,
+        tool_sources=None,
+        namespace=None,
     ):
         """Compile the notebook's flow and import it into the active wxo environment.
 
@@ -1314,12 +1278,17 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
         is written to disk because `orchestrate tools import` takes a file path
         rather than an in-memory object.
 
-        Any tool in `tool_sources` is imported (and overwritten) first. The
-        compiled spec references tool nodes by NAME only -- the tool's source is
-        never embedded -- so an unimported tool leaves that node unresolved at
-        runtime. Each tool's dependencies come from its own inline
-        `# /// dependencies = [...] # ///` block, written to a temp
-        requirements.txt and passed with -r; they cannot travel with the flow.
+        Tools are imported (and overwritten) first, because the compiled spec
+        references tool nodes by NAME only -- the tool's source is never embedded
+        -- so an unimported tool leaves that node unresolved at runtime.
+
+        Which tools those are is read off the flow itself: every tool node it
+        uses, resolved back to a file via the object of that name in `namespace`
+        (the notebook imported it, so it is in globals()). `tool_sources`
+        overrides that for anything the lookup cannot reach. Each tool's
+        dependencies come from its own inline `# /// dependencies = [...] # ///`
+        block, written to a temp requirements.txt and passed with -r; they cannot
+        travel with the flow.
         """
         Path(path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -1332,8 +1301,22 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
 
         # Tools first, and overwritten every time: the flow spec points at them by
         # name, so a stale or missing tool leaves the flow's tool node unresolved.
-        if tool_sources:
-            import_tools_to_wxo(tool_sources)
+        # import_tools_to_wxo dedupes by resolved path, so TOOL_SOURCES and the
+        # auto-resolved paths can overlap without importing anything twice.
+        sources = list(tool_sources or TOOL_SOURCES)
+        if namespace is not None:
+            resolved, unresolved = resolve_tool_sources(aflow, namespace)
+            sources.extend(resolved)
+            for name in unresolved:
+                print(
+                    f"  !! flow uses tool {name!r} but no source was found for "
+                    f"it; add its file to TOOL_SOURCES or the node will not "
+                    f"resolve at runtime",
+                    file=sys.stderr,
+                )
+
+        if sources:
+            import_tools_to_wxo(sources)
 
         proc = subprocess.run(
             ["orchestrate", "tools", "import", "-k", "flow", "-f", path],
@@ -1364,7 +1347,9 @@ def _(build_prize_detail_extraction_flow):
 @app.cell
 def _(flow_import, import_flow_to_wxo, run_flow_import):
     flow_import_result = (
-        import_flow_to_wxo(flow_import) if run_flow_import.value else None
+        import_flow_to_wxo(flow_import, namespace=globals())
+        if run_flow_import.value
+        else None
     )
     return (flow_import_result,)
 
@@ -1389,7 +1374,7 @@ def _():
 def _(InferenceClient):
     flows_client = InferenceClient(
         provider="wxo",
-        api_key=os.getenv("WXO_APIKEY", ""),
+        api_key=os.getenv("IBMCLOUD_APIKEY") or os.getenv("WXO_APIKEY", ""),
         url=os.getenv("WXO_ENDPOINT", ""),
         timeout=360,
     )
@@ -1415,9 +1400,7 @@ def _(flow_name, flow_selection):
         value=(
             flow_name
             if flow_name in flow_selection
-            else (
-                next(iter(flow_selection)) if len(flow_selection) > 0 else None
-            )
+            else (next(iter(flow_selection)) if len(flow_selection) > 0 else None)
         ),
     )
     return (flow_selection_dropdown,)

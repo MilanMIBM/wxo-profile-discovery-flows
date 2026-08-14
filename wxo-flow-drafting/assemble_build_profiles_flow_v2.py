@@ -33,7 +33,10 @@ with app.setup:
     )
     from ibm_watsonx_orchestrate.flow_builder.types import ForeachPolicy
     from src.helpers.ensure_wxo_env import ensure_wxo_env
-    from src.helpers.tool_import import import_tools_to_wxo
+    from src.helpers.tool_import import (
+        import_tools_to_wxo,
+        resolve_tool_sources,
+    )
 
     wxo_env_status = ensure_wxo_env(env_file="config/.env", reactivate=True)
     print(wxo_env_status)
@@ -1043,7 +1046,8 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
         aflow,
         path=FLOW_SPEC_PATH,
         dry_run=False,
-        tool_sources=TOOL_SOURCES,
+        tool_sources=None,
+        namespace=None,
     ):
         """Compile the notebook's flow and import it into the active wxo environment.
 
@@ -1059,12 +1063,17 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
         is written to disk because `orchestrate tools import` takes a file path
         rather than an in-memory object.
 
-        Any tool in `tool_sources` is imported (and overwritten) first. The
-        compiled spec references tool nodes by NAME only -- the tool's source is
-        never embedded -- so an unimported tool leaves that node unresolved at
-        runtime. Each tool's dependencies come from its own inline
-        `# /// dependencies = [...] # ///` block, written to a temp
-        requirements.txt and passed with -r; they cannot travel with the flow.
+        Tools are imported (and overwritten) first, because the compiled spec
+        references tool nodes by NAME only -- the tool's source is never embedded
+        -- so an unimported tool leaves that node unresolved at runtime.
+
+        Which tools those are is read off the flow itself: every tool node it
+        uses, resolved back to a file via the object of that name in `namespace`
+        (the notebook imported it, so it is in globals()). `tool_sources`
+        overrides that for anything the lookup cannot reach. Each tool's
+        dependencies come from its own inline `# /// dependencies = [...] # ///`
+        block, written to a temp requirements.txt and passed with -r; they cannot
+        travel with the flow.
         """
         Path(path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -1077,8 +1086,22 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
 
         # Tools first, and overwritten every time: the flow spec points at them by
         # name, so a stale or missing tool leaves the flow's tool node unresolved.
-        if tool_sources:
-            import_tools_to_wxo(tool_sources)
+        # import_tools_to_wxo dedupes by resolved path, so TOOL_SOURCES and the
+        # auto-resolved paths can overlap without importing anything twice.
+        sources = list(tool_sources or TOOL_SOURCES)
+        if namespace is not None:
+            resolved, unresolved = resolve_tool_sources(aflow, namespace)
+            sources.extend(resolved)
+            for name in unresolved:
+                print(
+                    f"  !! flow uses tool {name!r} but no source was found for "
+                    f"it; add its file to TOOL_SOURCES or the node will not "
+                    f"resolve at runtime",
+                    file=sys.stderr,
+                )
+
+        if sources:
+            import_tools_to_wxo(sources)
 
         proc = subprocess.run(
             ["orchestrate", "tools", "import", "-k", "flow", "-f", path],
@@ -1108,7 +1131,9 @@ def _(build_respondent_profile_enrichment_flow):
 @app.cell
 def _(flow_import, import_flow_to_wxo, run_flow_import):
     flow_import_result = (
-        import_flow_to_wxo(flow_import) if run_flow_import.value else None
+        import_flow_to_wxo(flow_import, namespace=globals())
+        if run_flow_import.value
+        else None
     )
     return (flow_import_result,)
 
