@@ -14,7 +14,7 @@ with app.setup:
     import os
 
     from pathlib import Path
-    from typing import List, Dict, Optional
+    from typing import List, Dict, Optional, Any
     from pydantic import BaseModel, Field
     from pymongo import MongoClient
     from dotenv import load_dotenv
@@ -611,8 +611,6 @@ def _():
         self.output.prizes_num = len(records)
         self.output.prizes_with_url_num = with_url
 
-        flow.private.enriched_prizes = []
-
     return (collect_prize_catalogue,)
 
 
@@ -781,8 +779,11 @@ def _():
             "metadata_tags": tags,
             "prize": prize,
         }
-        collected = flow["private"].get("enriched_prizes") or []
-        flow.private.enriched_prizes = collected + [self.output.row]
+        # Nothing is written to shared state: flow.private and system.context both
+        # collapse concurrent branch writes on merge-back. The record leaves this node
+        # as its own output, and collect_enriched_prizes reads it back from the loop's
+        # aggregate. The index is what lets that collector restore input order.
+        self.output.iteration_index = parent._current_index
 
     return (assemble_prize_record,)
 
@@ -813,9 +814,107 @@ class EnrichedPrizeOutput(BaseModel):
     prize: Optional[dict] = Field(
         default=None, description="The whole enriched prize record."
     )
-    row: Optional[dict] = Field(
+    row: Any = Field(
         default=None,
-        description="This iteration's record as appended to flow.private.enriched_prizes.",
+        description="This iteration's record, collected after the loop by collect_enriched_prizes.",
+    )
+    iteration_index: Any = Field(
+        default=None,
+        description="This iteration's foreach index, for ordering and gap detection.",
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
+
+
+@app.cell
+def _():
+    @logic_block(
+        display_name="Collect enriched prizes",
+        output_schema=CollectedPrizesOutput,
+    )
+    def collect_enriched_prizes(flow, self, parent, json):
+        """Reads every iteration's assemble_prize_record output from the loop's aggregate and appends each one into a single list.
+
+        Runs OUTSIDE the foreach, once, after every iteration has finished.
+        `parent.<loop>.output` is the only surface that exposes all iterations:
+        flow.private and system.context both collapse concurrent branch writes on
+        merge-back, and `parent.<loop>.<node>.output.<field>` resolves to a single
+        node's current value, i.e. the last branch to commit.
+
+        Reads:  parent.for_each_prize.output -- every node execution, every iteration
+        Writes: self.output.enriched_prizes  -- one record per iteration
+                self.output.collected_num    -- how many were recovered
+                self.output.collected_indices -- the iteration indices recovered"""
+
+        collected = parent.for_each_prize.output
+
+        # The aggregate is every node execution from every iteration, flattened in
+        # run order, each wrapped in its own single-element list:
+        #   [[stage], [fetch], [select], [extract], [tags], [assemble], [stage], ...]
+        # Only assemble_prize_record entries carry `row`, so that key identifies
+        # them -- no positional arithmetic, so adding or reordering nodes inside the
+        # loop does not affect this.
+        records = []
+        stack = [collected]
+        while stack:
+            entry = stack.pop(0)
+            if isinstance(entry, list):
+                for item in entry:
+                    stack.append(item)
+                continue
+            if not isinstance(entry, dict):
+                continue
+            row = entry.get("row")
+            if isinstance(row, dict):
+                records.append(
+                    {
+                        "iteration_index": entry.get("iteration_index"),
+                        "row": row,
+                    }
+                )
+
+        # Restore catalogue order: the loop is PARALLEL, so run order is completion
+        # order. Records with no index keep their arrival position, at the end.
+        indexed = []
+        unindexed = []
+        for record in records:
+            if isinstance(record.get("iteration_index"), int):
+                indexed.append(record)
+            else:
+                unindexed.append(record)
+        indexed.sort(key=lambda r: r["iteration_index"])
+
+        self.output.enriched_prizes = [r["row"] for r in indexed + unindexed]
+        self.output.collected_num = len(records)
+        self.output.collected_indices = [r["iteration_index"] for r in indexed]
+
+    return (collect_enriched_prizes,)
+
+
+@app.class_definition
+### collect_enriched_prizes - Output Schema
+class CollectedPrizesOutput(BaseModel):
+    """Outputs of the collect_enriched_prizes script node."""
+
+    model_config = {"extra": "allow"}
+
+    enriched_prizes: List[dict] = Field(
+        default_factory=list,
+        description="One enriched prize record per foreach iteration.",
+    )
+    collected_num: int = Field(
+        default=0,
+        description="How many records were recovered from the loop.",
+    )
+    collected_indices: List[int] = Field(
+        default_factory=list,
+        description="The foreach indices recovered, sorted -- a gap means a lost iteration.",
     )
 
 
@@ -836,47 +935,25 @@ def _(PrizeTableOutputs):
     def build_prize_table(flow, self, parent, json, each):
         """Flattens the loop's enriched prize records into one flat dict per prize so the result loads straight into a dataframe.
 
-        Runs ONCE, after the foreach -- it reads the whole accumulated list, not a
+        Runs ONCE, after the foreach -- it reads the whole collected list, not a
         single item, so it sits outside the loop where `parent._current_item` is
         meaningless.
 
-        Reads:  parent.<for_each_flow_name>.<last_node_name>.output -- the for_each's aggregated per-iteration outputs
-        Writes: self.output.rows      -- flat dicts, one per prize
-                self.output.row_count -- how many rows were produced
+        Reads:  flow.collect_enriched_prizes.output.enriched_prizes
+                flow.collect_prize_catalogue.output.prizes_num -- expected count
+        Writes: self.output.rows          -- flat dicts, one per prize
+                self.output.row_count     -- how many rows were produced
+                self.output.expected_rows -- how many prizes went into the loop
 
-        The loop hands back each iteration's assemble_prize_record output, which
-        nests the catalogue fields under `prize`. Pandas would turn that nested
-        dict into a single object-dtype column, so those fields are lifted to the
-        top level here and the row is left entirely flat."""
-        inputs = (
-            {"rows": parent.for_each_prize.assemble_prize_record.output}
-            if isinstance(
-                parent.for_each_prize.assemble_prize_record.output, list
-            )
-            else (
-                parent.for_each_prize.assemble_prize_record.output
-                if isinstance(
-                    parent.for_each_prize.assemble_prize_record.output, dict
-                )
-                else {}
-            )
-        )
-        rows_in = inputs.get("rows")
+        Each record nests the catalogue fields under `prize`. Pandas would turn
+        that nested dict into a single object-dtype column, so those fields are
+        lifted to the top level here and the row is left entirely flat."""
+        # prizes_num is written before the loop, so the two counts differing means
+        # records were lost getting out of the foreach.
+        expected = parent.collect_prize_catalogue.output.prizes_num or 0
 
-        # Tolerate the bare list and the {rows: [...]} / {items: [...]} wrappers.
-        if isinstance(rows_in, dict):
-            for key in ("rows", "items", "output", "result"):
-                if isinstance(rows_in.get(key), list):
-                    rows_in = rows_in[key]
-                    break
-        if not isinstance(rows_in, list):
-            rows_in = []
-
-        # The mapped input is the fallback, not the primary source: the foreach exposes no readable aggregate, so the records actually arrive via the flow-scoped list each iteration appended to.
-        if not rows_in:
-            collected = flow["private"].get("enriched_prizes")
-            if isinstance(collected, list):
-                rows_in = collected
+        collected = flow.collect_enriched_prizes.output.enriched_prizes
+        rows_in = collected if isinstance(collected, list) else []
 
         def text(value):
             return "" if value is None else str(value)
@@ -921,7 +998,8 @@ def _(PrizeTableOutputs):
 
         self.output.rows = rows_out
         self.output.row_count = len(rows_out)
-        self.output.preview_inputs = inputs
+        # row_count == expected_rows means every iteration's record made it out.
+        self.output.expected_rows = int(expected)
 
     return (build_prize_table,)
 
@@ -943,9 +1021,9 @@ def _():
         row_count: Optional[int] = Field(
             default=None, description="How many prize rows were produced."
         )
-        preview_inputs: Optional[dict] = Field(
+        expected_rows: Optional[int] = Field(
             default=None,
-            description="The inputs preview for debugging",
+            description="How many prizes went into the loop, i.e. how many rows to expect.",
         )
 
     return (PrizeTableOutputs,)
@@ -1033,21 +1111,24 @@ def _():
 @app.class_definition
 ### Flow-level private state
 class PrizeFlowPrivate(BaseModel):
-    """Internal accumulator for the for_each_prize loop.
+    """Flow-scoped private state.
 
-    The foreach node exposes no readable aggregate of its iterations: its
-    `output_schema` is deprecated and populates nothing, and mapping the loop's
-    output (whole or by leaf) into a downstream node yields empty. So each
-    iteration appends its own record to this flow-scoped list instead, and
-    build_prize_table reads the finished list after the loop.
+    NOT the loop accumulator, and no node writes to it.
 
-    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
-    node inside the subflow write somewhere a node outside it can read.
+    Nothing writable from inside a logic block survives a PARALLEL foreach: each
+    branch gets its own copy of flow state, merged back by whole-object
+    replacement. On the sibling profile flow, 40 iterations kept 8 records via a
+    flow.private list (one per concurrency batch) and 1 via per-iteration
+    system.context keys (one per run), with every iteration completed and no
+    errors -- the records existed and were lost in the merge, not the compute.
+
+    collect_enriched_prizes reads `parent.for_each_prize.output` instead, which
+    exposes every node execution from every iteration.
     """
 
     enriched_prizes: List[dict] = Field(
         default_factory=list,
-        description="One enriched prize record per completed iteration.",
+        description="Unused. Retained so the flow keeps a declared private schema.",
     )
 
 
@@ -1076,6 +1157,7 @@ def _(
     build_prize_table,
     build_prompt_extract_prize_details,
     build_prompt_metadata_tag_generation,
+    collect_enriched_prizes,
     collect_prize_catalogue,
     display_name,
     fetch_url_data,
@@ -1149,12 +1231,19 @@ def _(
             END,
         )
 
+        # Both sit OUTSIDE the loop. The collector reads the loop's aggregate rather
+        # than shared state, which does not survive the parallel branch merge.
+        gather = collect_enriched_prizes(
+            aflow, output_schema=CollectedPrizesOutput
+        )
+
         table = build_prize_table(aflow)
 
         aflow.sequence(
             START,
             collect,
             each,
+            gather,
             table,
             END,
         )

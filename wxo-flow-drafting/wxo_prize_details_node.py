@@ -119,9 +119,7 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -207,6 +205,11 @@ def fetch_url_data(
     urls: Union[str, List[str]],
     return_markdown_output: bool = True,
 ) -> dict:
+    # ///
+    # dependencies = [
+    #     "docling==2.55.1",
+    # ]
+    # ///
     """Fetches and converts the content of one or more URLs using Docling.
 
     Each URL is downloaded and parsed with Docling's DocumentConverter, then exported
@@ -261,7 +264,7 @@ class PrizePageContent(BaseModel):
         description="""Raw converted page content (Markdown or plain text) for a single prize page, as produced by the fetch_url_data tool."""
     )
     output_language: str = Field(
-        description="Desired generated output language.", default="eng"
+        description="Desired generated output language.", default="English"
     )
 
 
@@ -331,9 +334,7 @@ def _():
 class PrizeInfo(BaseModel):
     brand_name: str = Field(description="Brand that provides the prize.")
     prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(
-        description="Free-text description of the prize."
-    )
+    prize_description: str = Field(description="Free-text description of the prize.")
     generated_description: str = Field(
         default="",
         description="Optional cleaned or generated prize description containing only specification-related content.",
@@ -347,11 +348,9 @@ class PrizeInfo(BaseModel):
     tag_type: str = Field(
         description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
     )
-    number_of_tags: int = Field(
-        description="How many metadata tags to generate."
-    )
+    number_of_tags: int = Field(description="How many metadata tags to generate.")
     output_language: str = Field(
-        description="Desired generated output language.", default="eng"
+        description="Desired generated output language.", default="English"
     )
 
 
@@ -405,9 +404,7 @@ class MetadataTags(BaseModel):
     class Tags(BaseModel):
         metadata_tags: list[str] = Field(description="Output tags.")
 
-    tags: Tags = Field(
-        description="Object wrapper for the metadata tag output."
-    )
+    tags: Tags = Field(description="Object wrapper for the metadata tag output.")
 
 
 @app.cell(column=2, hide_code=True)
@@ -420,9 +417,7 @@ def _():
 
 @app.cell
 def _(run_tests, select_prize_url):
-    mo.hstack(
-        [select_prize_url, run_tests], justify="space-around", align="center"
-    )
+    mo.hstack([select_prize_url, run_tests], justify="space-around", align="center")
     return
 
 
@@ -445,9 +440,7 @@ def _(run_tests, test_url_fetch):
 
 @app.cell
 def _(url_contents):
-    mo.md(
-        url_contents.content["documents"][0]
-    ) if url_contents is not None else None
+    mo.md(url_contents.content["documents"][0]) if url_contents is not None else None
     return
 
 

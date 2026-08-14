@@ -524,7 +524,6 @@ def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
         flow_result = flows_client.run_wxo_flow(
             flow_id=flow_selection_dropdown.value,
             flow_input=test_flow,
-            execution_summary=True,
             retries=1,
         )
     else:

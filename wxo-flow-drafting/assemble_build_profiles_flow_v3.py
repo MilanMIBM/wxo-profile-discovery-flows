@@ -25,6 +25,10 @@ with app.setup:
         sys.path.insert(0, parent_dir)
 
     from src.helpers.logic_block import logic_block
+    from src.helpers.foreach_collector import (
+        collected_output_schema,
+        foreach_collector,
+    )
     from ibm_watsonx_orchestrate.flow_builder.flows import (
         END,
         START,
@@ -237,7 +241,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -251,7 +255,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -265,7 +269,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
 
@@ -285,7 +289,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
 
@@ -297,7 +301,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (account_ids_unique,)
 
@@ -309,7 +313,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (user_emails,)
 
@@ -606,10 +610,13 @@ def _():
         enriched_record = dict(enriched_profile)
         enriched_record["analysis"] = analysis
 
+        # Nothing is written to shared state here. Both flow.private and
+        # system.context collapse concurrent branch writes on merge-back (40
+        # iterations -> 8 and 1 record respectively), so the record leaves this node
+        # only as its own output; collect_enriched_profiles reads it from outside.
         self.output.enriched_profile = enriched_record
         self.output.preview_inputs = inputs
-
-        flow["private"]["enriched_profiles"].append(enriched_record)
+        self.output.iteration_index = parent._current_index
 
     return (merge_profile_signals,)
 
@@ -630,6 +637,39 @@ class MergeProfileOutput(BaseModel):
         default_factory=None,
         description="Preview inputs from the flow for debugging purposes",
     )
+    iteration_index: Any = Field(
+        default_factory=None,
+        description="This iteration's foreach index, for ordering and gap detection.",
+    )
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ---
+    """)
+    return
+
+
+@app.cell
+def _():
+    # The collector is generic: `parent.<loop>.output` is the only surface that
+    # exposes every iteration, and walking it differs between flows only by which
+    # loop and which record key. See src/helpers/foreach_collector.py.
+    collect_enriched_profiles = foreach_collector(
+        loop_name="each_respondent",
+        record_key="enriched_profile",
+        name="collect_enriched_profiles",
+        output_field="enriched_profiles",
+        display_name="Collect enriched profiles",
+    )
+
+    CollectedProfilesOutput = collected_output_schema(
+        "enriched_profiles",
+        "CollectedProfilesOutput",
+        item_description="One enriched profile record per foreach iteration.",
+    )
+    return CollectedProfilesOutput, collect_enriched_profiles
 
 
 @app.cell(hide_code=True)
@@ -649,14 +689,16 @@ def _():
     def build_profile_table(flow, self, parent, json, each):
         """Turns the loop's enriched profile records into a table, decomposing `analysis` and `identity` one level into dot-notation columns.
 
-        Runs ONCE, after the foreach -- it reads the whole accumulated list, not a
+        Runs ONCE, after the foreach -- it reads every iteration's record, not a
         single item, so it sits outside the loop where `parent._current_item` is
         meaningless.
 
-        Reads:  flow.private.enriched_profiles -- every record the loop appended
+        Reads:  flow.collect_enriched_profiles.output.enriched_profiles
+                flow.build_respondent_profiles.output.profiles_num -- expected count
         Writes: self.output.rows             -- one row per respondent
                 self.output.output_row_count -- how many rows were produced
-                self.output.input_row_count  -- how many records the loop left
+                self.output.input_row_count  -- how many records were recovered
+                self.output.expected_rows    -- how many iterations should have run
                 self.output.enriched_profiles -- the records as they arrived
 
         Nothing is dropped: every key on the record survives into the row. Only
@@ -667,8 +709,12 @@ def _():
         naming scorers) and stops at one level, so a scorer's own nested result
         stays whole in its cell."""
 
-        # The only source: the foreach exposes no readable aggregate of its iterations, so the records arrive via the flow-scoped list each iteration appended to.
-        collected = flow["private"].get("enriched_profiles")
+        # collect_enriched_profiles sits outside the loop and pulls the records from
+        # the loop's node outputs; profiles_num is written before the loop, so the two
+        # counts differing means records were lost getting out of the foreach.
+        expected = parent.build_respondent_profiles.output.profiles_num or 0
+
+        collected = flow.collect_enriched_profiles.output.enriched_profiles
         rows_in = collected if isinstance(collected, list) else []
 
         DECOMPOSE = ("analysis", "identity")
@@ -693,6 +739,8 @@ def _():
         self.output.output_row_count = len(rows_out)
         self.output.input_row_count = len(rows_in)
         self.output.enriched_profiles = rows_in
+        # input_row_count == expected_rows means every iteration's record made it out.
+        self.output.expected_rows = int(expected)
 
     return (build_profile_table,)
 
@@ -723,6 +771,10 @@ class ProfileTableOutputs(BaseModel):
         default_factory=list,
         description="The full nested profile documents, one per respondent, before flattening.",
     )
+    expected_rows: int = Field(
+        default=0,
+        description="How many profiles went into the loop, i.e. how many rows to expect.",
+    )
 
 
 @app.cell(column=2, hide_code=True)
@@ -744,26 +796,17 @@ def _():
 @app.class_definition
 ### Flow-level private state
 class ProfileFlowPrivate(BaseModel):
-    """Internal accumulator for the for_each loop.
+    """Flow-scoped private state.
 
-    The foreach node exposes no readable aggregate of its iterations: its
-    `output_schema` is deprecated and populates nothing, and mapping the loop's
-    output (whole or by leaf) into a downstream node yields empty. So each
-    iteration appends its own record to this flow-scoped list instead, and
-    build_profile_table reads the finished list after the loop.
+    NOT the loop accumulator, and no node writes to it.
 
-    flow.private.* is flow-scoped rather than node-scoped, which is what lets a
-    node inside the subflow write somewhere a node outside it can read.
+    Neither shared-state mechanism survives a PARALLEL foreach: each branch gets
+    its own copy, merged back by whole-object replacement. flow.private kept 8 of
+    40 records (one per concurrency batch); system.context keyed per iteration
+    kept 1 of 40 (one per run). Both runs completed every iteration with no
+    errors, so the records existed and were lost in the merge, not the compute.
 
-    Appended to in place rather than rebuilt, because the loop runs PARALLEL:
-    `.append()` has no gap between a read and a write, whereas rebuilding the
-    list from a snapshot (`collected + [record]`) drops whatever landed in
-    between. The `default_factory` matters -- it means the list already exists
-    when the first iteration runs, so no iteration has to create it and two of
-    them cannot race to do so.
-
-    Order is completion order, not input order, and duplicates survive: a
-    respondent processed twice appears twice.
+    collect_enriched_profiles reads the loop's node outputs by expression instead.
     """
 
     model_config = {"extra": "allow"}
@@ -774,7 +817,7 @@ class ProfileFlowPrivate(BaseModel):
     )
     enriched_profiles: list = Field(
         default_factory=list,
-        description="The full nested profile document per respondent, in completion order, before flattening.",
+        description="Unused. Retained so the flow keeps a declared private schema.",
     )
 
 
@@ -806,9 +849,11 @@ class ProfileFlowOutput(BaseModel):
 @app.cell
 def _(
     BrandFanOutput,
+    CollectedProfilesOutput,
     SustainedEngagementOutput,
     build_profile_table,
     build_respondent_profiles,
+    collect_enriched_profiles,
     display_name,
     flow_name,
     likely_long_term_brand_fan,
@@ -864,13 +909,20 @@ def _(
             merge,
             END,
         )
-        # Sits OUTSIDE the loop: it reads the whole accumulated list once, after every iteration has appended its own record to flow.private.enriched_profiles.
+        # Both sit OUTSIDE the loop. The collector reads the loop's node outputs by
+        # expression rather than through shared state, which does not survive the
+        # parallel branch merge.
+        collect = collect_enriched_profiles(
+            aflow, output_schema=CollectedProfilesOutput
+        )
+
         table = build_profile_table(aflow, output_schema=ProfileTableOutputs)
 
         aflow.sequence(
             START,
             build_profiles,
             each,
+            collect,
             table,
             END,
         )
