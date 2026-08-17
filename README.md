@@ -2,22 +2,23 @@
 
 watsonx Orchestrate agentic flow tooling for generating profile data based on hypothesis-driven behavioral analysis.
 
-Every notebook in this repo is a [marimo](https://marimo.io) notebook stored as a plain `.py` file - no `.ipynb`, no hidden state, no output diffs. That means they are importable Python modules as well as runnable notebooks, which is the core idea the whole project leans on: a logic block is authored and tested in one notebook, then imported by name into another that wires it into a flow.
+Every notebook in this repo is a [marimo](https://marimo.io) notebook stored as a plain `.py` file - no `.ipynb`, no hidden state, no output diffs. That means they are importable Python modules as well as runnable notebooks, which is the core idea the whole setup leans on: a logic block is authored and tested in one notebook, then imported by name into another that wires it into a flow.
 
 ## Setup
 
 ```bash
-uv sync                              # or: pip install -r requirements.txt
+uv sync                              # or: uv add -r requirements.txt
 cp config/.env.TEMPLATE config/.env  # then fill in your credentials
 ```
 
-Requires Python 3.14+. `config/.env` holds the watsonx Orchestrate environment name and API key, plus MongoDB / PostgreSQL endpoints - it is gitignored, as is the `.pem` cert it points at.
+The environment is setup for Python version **3.14+**. `config/.env` holds the watsonx Orchestrate environment name and API key, plus MongoDB / PostgreSQL endpoints - it is gitignored, as is the `.pem` cert it points at.
 
 Notebooks call [`ensure_wxo_env`](src/helpers/ensure_wxo_env.py) in their setup cell, which activates the right `orchestrate` environment if it isn't already active. You don't need to source anything by hand before starting a notebook.
 
 ## Running the notebooks
 
 ```bash
+marimo edit                                                        # Opens up the general view allowing you to launch/edit any of the notebooks
 marimo edit wxo-flow-drafting/assemble_build_profiles_flow_v3.py   # author / build a flow
 marimo edit wxo-deployed-flow-testing.py                           # test what's deployed
 marimo run  wxo-deployed-flow-testing.py                           # read-only app view, no code
@@ -29,9 +30,9 @@ Run them from the repo root - paths like `config/.env` and `src/flow_specs/` are
 
 ## `wxo-flow-drafting/` - building the flows
 
-This is where the work happens. Two kinds of notebook live here:
+This is where the development happens. Two kinds of notebook live here:
 
-**Node notebooks** (`wxo_*_node.py`) - one per logic block. Each authors a single node's Python logic and tests it locally against real data, without touching Orchestrate at all. Because marimo's `@app.function` and `@app.class_definition` cells are module-level, the functions they define import like any other symbol.
+**Node notebooks** (`wxo_*_node.py`) - in each you can author one or more nodes, test them locally against real data from the database, without uploading the tooling to wxo yet (with some exceptions like Prompt Nodes which cannot be tested locally). Because marimo's `@app.function` and `@app.class_definition` cells are module-level, the functions they define import like any other symbol.
 
 | Notebook                                                                                           | Node                         |
 | -------------------------------------------------------------------------------------------------- | ---------------------------- |
@@ -40,13 +41,13 @@ This is where the work happens. Two kinds of notebook live here:
 | [wxo_long_term_fan_node.py](wxo-flow-drafting/wxo_long_term_fan_node.py)                           | long-term fan classification |
 | [wxo_prize_details_node.py](wxo-flow-drafting/wxo_prize_details_node.py)                           | prize detail extraction      |
 
-**Assembly notebooks** (`assemble_*_flow*.py`) - import the blocks from the node notebooks, wire them into an end-to-end flow, compile it, and import it into Orchestrate. There are two flows: `assemble_build_profiles_flow*` (respondent profile enrichment) and `assemble_prize_detail_extraction_flow*`. These are versioned by filename suffix (`_v2`, `_v3`, …) rather than overwritten, so earlier assemblies stay runnable for comparison - work from the highest version unless you're specifically looking back.
+**Assembly notebooks** (`assemble_*_flow*.py`) - import the blocks from the node notebooks, wire them into an end-to-end flow, compile it, and import it into Orchestrate. There are two flow examples in this repo: `assemble_build_profiles_flow*` (respondent profile enrichment) and `assemble_prize_detail_extraction_flow*`.
 
 The split is deliberate: node notebooks are where a block is *authored and tested*, assembly notebooks only *wire and ship*.
 
 ### Build and import
 
-The assembly notebooks end with an `import_flow_to_wxo` cell behind a run button. It calls `flow.compile()` (not `compile_deploy()` - the ADK rejects flow-tool deploys against anything but a local server), writes the spec to `src/flow_specs/<flow_name>.json`, and shells out to `orchestrate tools import`, which takes a file path rather than an in-memory object.
+The assembly notebooks end with an `import_flow_to_wxo` cell behind a run button. It calls `flow.compile()`, writes the spec to `src/flow_specs/<flow_name>.json`, and shells out to `orchestrate tools import`, which takes a file path rather than an in-memory object.
 
 **Tools are imported first, and overwritten every time.** A compiled flow spec references tool nodes *by name only* - unlike script nodes, which carry their bodies inline, a tool node's source never travels with the flow. A tool that isn't already registered in the environment leaves that node unresolved at runtime. Dependencies are separate again: pip runs server-side at deploy time from a requirements file attached to the *tool* import. Rather than hand-maintain those, each tool declares its own inline in a PEP 723-style block:
 
@@ -59,8 +60,6 @@ The assembly notebooks end with an `import_flow_to_wxo` cell behind a run button
 ```
 
 [`import_tools_to_wxo`](src/helpers/tool_import.py) parses those out, writes a temp requirements.txt per tool, and imports each with `-r`. Nothing permanent is written to the repo.
-
-One gotcha worth knowing: pass the *built* flow to that function, not the builder. `@flow` compiles once at decoration time and caches the result, so calling the builder again replays the body against an already-compiled flow and raises `Flow has already been compiled.` Re-run the cell that defines the flow to get a fresh one.
 
 ### Collecting foreach results
 
@@ -93,7 +92,7 @@ This is the notebook to reach for when a flow is deployed and you want to know w
 
 ## Typical loop
 
-1. Author or edit a logic block in its `wxo_*_node.py` notebook, testing it there against real rows.
+1. Author or edit a logic block, python tool, prompt nodes, etc. in their dedicated `wxo_*_node.py` notebook, test them there against real rows.
 2. Open the current assembly notebook, re-run the cell that imports the block and the cell that builds the flow.
 3. Hit the import button - tools go up first, then the compiled flow spec.
 4. Switch to `wxo-deployed-flow-testing.py` to run it end-to-end and check the output lands in MongoDB.
