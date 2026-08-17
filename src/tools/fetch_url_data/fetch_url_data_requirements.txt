@@ -1,2 +1,0 @@
-docling==2.120.1
-pydantic==2.13.4

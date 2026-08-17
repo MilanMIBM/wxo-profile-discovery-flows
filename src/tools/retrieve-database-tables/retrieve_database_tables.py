@@ -3,12 +3,14 @@ from typing import List, Optional, Union
 from ibm_watsonx_orchestrate.agent_builder.connections import ConnectionType
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
+# ----- ----- ----- ----- -----
+### IMPORTANT NOTE! These are not utilized in the current setup, as they were made for the original concept of baking in the connectors into the flows themselves as connections/python tools, retrieval logic and upload logic are decoupled from the flows and occur outside. The flows in their current version act as a data processing api making them more reusable and easier to manage.
+# ----- ----- ----- ----- -----
+
 # A single filter value (str/int/float/bool) or a list of them (match any).
 MatchValue = Union[str, int, float, bool, List[Union[str, int, float, bool]]]
 
-# app_id of the key/value connection this tool reads the Postgres connection
-# string from. The connection holds full SQLAlchemy URLs under
-# POSTGRES_CONN_STRING_PUBLIC and/or POSTGRES_CONN_STRING_PRIVATE.
+# app_id of the key/value connection this tool reads the Postgres connection string from. The connection holds full SQLAlchemy URLs under POSTGRES_CONN_STRING_PUBLIC and/or POSTGRES_CONN_STRING_PRIVATE.
 PG_CONNECTOR_APP_ID = "postgres-conn-string"
 
 
@@ -18,11 +20,7 @@ PG_CONNECTOR_APP_ID = "postgres-conn-string"
     expected_credentials=[
         {"app_id": PG_CONNECTOR_APP_ID, "type": ConnectionType.KEY_VALUE},
     ],
-    # Declare the concrete return shape so downstream tools/agents can bind to
-    # `table` and `rows`. Row objects vary per table, so each row is an untyped
-    # object (its own keys aren't fixed across tables). Every description must be
-    # a single flat string literal -- the flow builder rejects multi-part
-    # (implicitly concatenated) strings.
+    # Declare the concrete return shape so downstream tools/agents can bind to `table` and `rows`. Row objects vary per table, so each row is an untyped object (its own keys aren't fixed across tables). Every description must be  a single flat string literal -- the flow builder rejects multi-part (implicitly concatenated) strings.
     output_schema={
         "type": "array",
         "description": "One entry per requested table, each with the table name and its matching rows.",
@@ -36,9 +34,7 @@ PG_CONNECTOR_APP_ID = "postgres-conn-string"
                 "rows": {
                     "type": "array",
                     "description": "Rows from the table as objects keyed by column name. Columns vary per table, so row objects carry no fixed properties.",
-                    # The flow object builder requires every `object` to declare
-                    # `properties`; an empty map keeps rows free-form (arbitrary
-                    # column keys) while satisfying that rule.
+                    # The flow object builder requires every `object` to declare `properties`; an empty map keeps rows free-form (arbitrary column keys) while satisfying that rule.
                     "items": {"type": "object", "properties": {}},
                 },
             },
@@ -129,8 +125,7 @@ def retrieve_database_tables(
             else [match_value]
         )
 
-    # sslmode is baked into the (normalised) connection string - verify-full is
-    # downgraded to require there - so we don't override it via connect_args.
+    # sslmode is baked into the (normalised) connection string - verify-full is downgraded to require there - so we don't override it via connect_args.
     engine = sqlalchemy.create_engine(endpoint)
 
     results = []
@@ -139,8 +134,7 @@ def retrieve_database_tables(
             sql = f"SELECT * FROM {tbl}"
             params = {}
 
-            # Only filter tables that actually have the requested column, so a
-            # shared match_column across heterogeneous tables doesn't blow up.
+            # Only filter tables that actually have the requested column, so a shared match_column across heterogeneous tables doesn't blow up.
             if match_column is not None and match_column in _table_columns(conn, tbl):
                 sql += f' WHERE "{match_column}" IN :vals'
                 params = {"vals": values}
@@ -175,8 +169,7 @@ def _jsonable_row(row):
         if val is None or isinstance(val, (bool, int, float, str)):
             return val
         if isinstance(val, decimal.Decimal):
-            # float keeps it numeric; str would be safer for exact precision but
-            # breaks numeric consumers. Prefer numeric here.
+            # float keeps it numeric; str would be safer for exact precision but breaks numeric consumers. Prefer numeric here.
             return float(val)
         if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
@@ -221,8 +214,7 @@ def _resolve_conn_string(prefer_private=False):
         # Connection not bound / running outside Orchestrate -> fall back to env.
         pass
 
-    # Fall back to environment variables (with $VAR expansion) for anything the
-    # connection didn't supply.
+    # Fall back to environment variables (with $VAR expansion) for anything the connection didn't supply.
     if not public:
         public = os.path.expandvars(os.getenv("POSTGRES_CONN_STRING_PUBLIC", ""))
     if not private:
@@ -261,8 +253,7 @@ def _normalize_conn_string(url):
 
     parts = urlsplit(url)
     query = parse_qsl(parts.query, keep_blank_values=True)
-    # verify-full/verify-ca need a CA cert file the sandbox doesn't have; anything
-    # else (or nothing) we leave, then ensure require is set as the floor.
+    # verify-full/verify-ca need a CA cert file the sandbox doesn't have; anything else (or nothing) we leave, then ensure require is set as the floor.
     query = [
         (k, v)
         for (k, v) in query

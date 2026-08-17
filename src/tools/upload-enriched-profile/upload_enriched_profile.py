@@ -3,10 +3,11 @@ from typing import Optional
 from ibm_watsonx_orchestrate.agent_builder.connections import ConnectionType
 from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
-# app_id of the key/value connection this tool reads the MongoDB connection
-# string from. The connection holds the full URL under MONGODB_CONN_STRING (or
-# MONGODB_ENDPOINT) and, for IBM Cloud Databases, the CA certificate under
-# MONGODB_CA_CERT_BASE64.
+# ----- ----- ----- ----- -----
+### IMPORTANT NOTE! These are not utilized in the current setup, as they were made for the original concept of baking in the connectors into the flows themselves as connections/python tools, retrieval logic and upload logic are decoupled from the flows and occur outside. The flows in their current version act as a data processing api making them more reusable and easier to manage.
+# ----- ----- ----- ----- -----
+
+# app_id of the key/value connection this tool reads the MongoDB connection string from. The connection holds the full URL under MONGODB_CONN_STRING (or MONGODB_ENDPOINT) and, for IBM Cloud Databases, the CA certificate under MONGODB_CA_CERT_BASE64.
 MONGO_CONNECTOR_APP_ID = "mongodb-conn-string"
 
 
@@ -16,9 +17,7 @@ MONGO_CONNECTOR_APP_ID = "mongodb-conn-string"
     expected_credentials=[
         {"app_id": MONGO_CONNECTOR_APP_ID, "type": ConnectionType.KEY_VALUE},
     ],
-    # Declare the concrete return shape so downstream nodes can bind to the
-    # individual fields. Every description must be a single flat string literal --
-    # the flow builder rejects multi-part (implicitly concatenated) strings.
+    # Declare the concrete return shape so downstream nodes can bind to the individual fields. Every description must be a single flat string literal -- the flow builder rejects multi-part (implicitly concatenated) strings.
     output_schema={
         "type": "object",
         "description": "Summary of the write that was performed.",
@@ -116,8 +115,7 @@ def upload_enriched_profile(
         coll = client[database][collection]
         key_val = doc.get(upsert_key) if upsert_key else None
         if key_val is not None:
-            # Upsert: a re-run of the flow replaces the respondent's document
-            # rather than appending a second copy of it.
+            # Upsert: a re-run of the flow replaces the respondent's document rather than appending a second copy of it.
             result = coll.replace_one({upsert_key: key_val}, doc, upsert=True)
             operation = "inserted" if result.upserted_id is not None else "replaced"
             document_id = (
@@ -187,8 +185,7 @@ def _resolve_ca_file(creds):
 if __name__ == "__main__":
     import json
 
-    # Upload a single throwaway profile document. Reads MONGODB_ENDPOINT from the
-    # environment; run against a scratch collection.
+    # Upload a single throwaway profile document. Reads MONGODB_ENDPOINT from the environment; run against a scratch collection.
     print(
         json.dumps(
             upload_enriched_profile.fn(
@@ -197,7 +194,9 @@ if __name__ == "__main__":
                     "identity": {"email": "test@example.com"},
                     "categorization": {
                         "sustained_engagement_level": 2,
-                        "respondent_behavioral_metatags": ["likely_long_term_brand_fan"],
+                        "respondent_behavioral_metatags": [
+                            "likely_long_term_brand_fan"
+                        ],
                     },
                 },
                 collection="enriched_profiles_scratch",
