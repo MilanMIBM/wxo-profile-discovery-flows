@@ -419,7 +419,7 @@ def upload_document(
             When given, the collection is checked for a document holding the
             same value under that field before inserting. Ignored when *doc*
             does not carry the field.
-        on_existing: What to do when a match is found — ``"skip"`` (default)
+        on_existing: What to do when a match is found - ``"skip"`` (default)
             leaves the stored document untouched, ``"update"`` overwrites its
             fields with the ones from *doc*, ``"overwrite"`` replaces the stored
             document wholesale so fields absent from *doc* are dropped.
@@ -432,9 +432,7 @@ def upload_document(
         field other than ``_id``.
     """
     if on_existing not in ("skip", "update", "overwrite"):
-        raise ValueError(
-            "on_existing must be one of 'skip', 'update' or 'overwrite'."
-        )
+        raise ValueError("on_existing must be one of 'skip', 'update' or 'overwrite'.")
 
     payload = clean_document(doc) if clean else dict(doc)
     target = _resolve_collection(mongodb, collection, db_name)
@@ -499,7 +497,7 @@ def upload_documents(
             holding those values; matches are not re-inserted. Documents that
             do not carry the field are always inserted. Without it, every
             document is inserted as-is.
-        on_existing: What to do with documents that already exist —
+        on_existing: What to do with documents that already exist -
             ``"skip"`` (default) leaves them untouched, ``"update"`` overwrites
             their fields with the incoming values, ``"overwrite"`` replaces each
             stored document wholesale with the incoming one, so fields it holds
@@ -526,9 +524,7 @@ def upload_documents(
         this check keeps a re-run from duplicating its own earlier upload.
     """
     if on_existing not in ("skip", "update", "overwrite"):
-        raise ValueError(
-            "on_existing must be one of 'skip', 'update' or 'overwrite'."
-        )
+        raise ValueError("on_existing must be one of 'skip', 'update' or 'overwrite'.")
 
     payload = _as_doc_list(docs)
     if not payload:
@@ -800,7 +796,7 @@ def delete_document(
     Args:
         mongodb: ``MongoClient`` or ``Database``.
         collection: Target collection name.
-        selectors: Query filter. Must be non-empty — use :func:`purge_documents`
+        selectors: Query filter. Must be non-empty - use :func:`purge_documents`
             to clear a whole collection.
         db_name: Database name; defaults to the URI's default database.
         many: Delete every match instead of only the first.

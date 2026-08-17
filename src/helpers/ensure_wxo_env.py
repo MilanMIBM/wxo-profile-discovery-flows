@@ -22,8 +22,7 @@ def ensure_wxo_env(env_file="config/.env", reactivate=False, verbose=True):
         None), `already_active`, and `activated` (whether this call ran
         `env activate`).
     """
-    # Load into os.environ so WXO_* are readable here and inherited by any
-    # subprocess. override=True keeps the file authoritative over stale values.
+    # Load into os.environ so WXO_* are readable here and inherited by any subprocess. override=True keeps the file authoritative over stale values.
     load_dotenv(env_file, override=True)
     env_name = os.getenv("WXO_ENV_NAME")
     api_key = os.getenv("WXO_APIKEY")
@@ -36,9 +35,7 @@ def ensure_wxo_env(env_file="config/.env", reactivate=False, verbose=True):
     def run(args):
         return subprocess.run(["orchestrate", *args], capture_output=True, text=True)
 
-    # `env list` renders a table, one env per line, with "(active)" appended to
-    # the current one. Long names are truncated with a trailing "…", so compare
-    # on the truncated stem rather than requiring an exact match.
+    # `env list` renders a table, one env per line, with "(active)" appended to the current one. Long names are truncated with a trailing "…", so compare on the truncated stem rather than requiring an exact match.
     listed = run(["env", "list"])
     if listed.returncode != 0:
         raise RuntimeError(

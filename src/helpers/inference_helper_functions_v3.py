@@ -71,8 +71,7 @@ class InferenceClient:
     calls may override.
     """
 
-    # Valid WXO tool binding types, per the /tools schema (ToolBinding object).
-    # Each tool's ``binding`` carries exactly one of these keys.
+    # Valid WXO tool binding types, per the /tools schema (ToolBinding object). Each tool's ``binding`` carries exactly one of these keys.
     WXO_TOOL_BINDING_TYPES = (
         "openapi",
         "python",

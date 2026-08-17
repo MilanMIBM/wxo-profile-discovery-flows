@@ -26,8 +26,7 @@ with app.setup:
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
 
-    # `flows` must be imported before `node`, otherwise importing PromptNode
-    # directly trips a circular import inside the ADK.
+    # `flows` must be imported before `node`, otherwise importing PromptNode directly trips a circular import inside the ADK.
     from ibm_watsonx_orchestrate.flow_builder.flows import Flow
     from ibm_watsonx_orchestrate.flow_builder.node import PromptNode
     from ibm_watsonx_orchestrate.agent_builder.tools import tool
@@ -83,16 +82,14 @@ def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    # Drop existing tables before reloading them from CSV. Compare the string, since
-    # bool("False") is True.
+    # Drop existing tables before reloading them from CSV. Compare the string, since bool("False") is True.
     rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
     print(f"Rewrite tables: **{rewrite_tables}**")
 
     TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
 
-    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
-    # in the directory and it gets loaded without touching this cell.
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV in the directory and it gets loaded without touching this cell.
     table_csvs = sorted(TABLES_DIR.glob("*.csv"))
     print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
@@ -122,9 +119,7 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -205,22 +200,22 @@ class FetchUrlDataOutput(BaseModel):
     enable_dynamic_input_schema=True,
     enable_dynamic_output_schema=True,
     # Wrapped in ToolResponseBody rather than passed as a bare dict: @tool declares this parameter as that type, and a raw dict is stored unvalidated, so pydantic warns "Expected ToolResponseBody" whenever the spec is later serialized. Constructing it here validates the schema at definition time instead.
-    #     output_schema=ToolResponseBody.model_validate(
-    #         {
-    #             "description": "The converted documents, one string per requested URL.",
-    #             "properties": {
-    #                 "documents": {
-    #                     "description": "The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.",
-    #                     "items": {"type": "string"},
-    #                     "title": "Documents",
-    #                     "type": "array",
-    #                 }
-    #             },
-    #             "required": ["documents"],
-    #             "title": "FetchUrlDataOutput",
-    #             "type": "object",
-    #         }
-    #     ),
+    output_schema=ToolResponseBody.model_validate(
+        {
+            "description": "The converted documents, one string per requested URL.",
+            "properties": {
+                "documents": {
+                    "description": "The converted content, one entry per requested URL, in the order the URLs were supplied. Always a list, even for a single URL. A URL that failed to convert yields an entry beginning with 'ERROR:' followed by the reason.",
+                    "items": {"type": "string"},
+                    "title": "Documents",
+                    "type": "array",
+                }
+            },
+            "required": ["documents"],
+            "title": "FetchUrlDataOutput",
+            "type": "object",
+        }
+    ),
 )
 def fetch_url_data(
     urls: List[str],
@@ -228,6 +223,7 @@ def fetch_url_data(
 ) -> FetchUrlDataOutput:
     # ///
     # dependencies = [
+    #     "ibm-watsonx-orchestrate==2.14.0",
     #     "docling==2.120.1",
     #     "pydantic==2.13.4",
     # ]
@@ -251,8 +247,7 @@ def fetch_url_data(
     from docling.document_converter import DocumentConverter
     from typing import List
 
-    # Declared as List[str], but normalised defensively: the annotation drives the
-    # schema, this line survives a caller that sends a bare string anyway.
+    # Declared as List[str], but normalised defensively: the annotation drives the schema, this line survives a caller that sends a bare string anyway.
     url_list: List[str] = [urls] if isinstance(urls, str) else list(urls)
 
     converter = DocumentConverter()
@@ -360,9 +355,7 @@ def _():
 class PrizeInfo(BaseModel):
     brand_name: str = Field(description="Brand that provides the prize.")
     prize_name: str = Field(description="Name of the prize.")
-    prize_description: str = Field(
-        description="Free-text description of the prize."
-    )
+    prize_description: str = Field(description="Free-text description of the prize.")
     generated_description: str = Field(
         default="",
         description="Optional cleaned or generated prize description containing only specification-related content.",
@@ -376,9 +369,7 @@ class PrizeInfo(BaseModel):
     tag_type: str = Field(
         description="Descriptor the generated tags must match, e.g. 'material', 'use case', 'audience'."
     )
-    number_of_tags: int = Field(
-        description="How many metadata tags to generate."
-    )
+    number_of_tags: int = Field(description="How many metadata tags to generate.")
     output_language: str = Field(
         description="Desired generated output language.", default="English"
     )
@@ -434,9 +425,7 @@ class MetadataTags(BaseModel):
     class Tags(BaseModel):
         metadata_tags: list[str] = Field(description="Output tags.")
 
-    tags: Tags = Field(
-        description="Object wrapper for the metadata tag output."
-    )
+    tags: Tags = Field(description="Object wrapper for the metadata tag output.")
 
 
 @app.cell(column=2, hide_code=True)
@@ -449,9 +438,7 @@ def _():
 
 @app.cell
 def _(run_tests, select_prize_url):
-    mo.hstack(
-        [select_prize_url, run_tests], justify="space-around", align="center"
-    )
+    mo.hstack([select_prize_url, run_tests], justify="space-around", align="center")
     return
 
 
@@ -480,9 +467,7 @@ def _(run_tests, test_url_fetch):
 
 @app.cell
 def _(url_contents):
-    mo.md(
-        url_contents.content.documents[0]
-    ) if url_contents is not None else None
+    mo.md(url_contents.content.documents[0]) if url_contents is not None else None
     return
 
 

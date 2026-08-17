@@ -94,16 +94,14 @@ def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    # Drop existing tables before reloading them from CSV. Compare the string, since
-    # bool("False") is True.
+    # Drop existing tables before reloading them from CSV. Compare the string, since bool("False") is True.
     rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
     print(f"Rewrite tables: {rewrite_tables}")
 
     TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
 
-    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
-    # in the directory and it gets loaded without touching this cell.
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV in the directory and it gets loaded without touching this cell.
     table_csvs = sorted(TABLES_DIR.glob("*.csv"))
     print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
@@ -205,7 +203,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -219,7 +217,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -233,7 +231,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
 
@@ -253,7 +251,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
 
@@ -265,7 +263,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (account_ids_unique,)
 
@@ -277,7 +275,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (user_emails,)
 
@@ -403,9 +401,7 @@ def _():
 
 @app.cell
 def _():
-    # Authored and locally tested in wxo_base_profile_node.py; imported here
-    # so there is exactly one definition of it. Needed only to produce the
-    # profiles this notebook's local test scores.
+    # Authored and locally tested in wxo_base_profile_node.py; imported here so there is exactly one definition of it. Needed only to produce the profiles this notebook's local test scores.
     from wxo_base_profile_node import (
         build_respondent_profiles,
     )
@@ -546,8 +542,7 @@ def sustained_engagement_level(flow, self, parent, json, datetime):
         window = int(b.get("timeframe_days") or 0)
         if gap <= 0 or window <= 0:
             continue
-        # Anchoring on each completion is enough: a qualifying window can always
-        # be slid forward until its first sub-period starts on a completion.
+        # Anchoring on each completion is enough: a qualifying window can always be slid forward until its first sub-period starts on a completion.
         if any(
             sustains_cadence(ordinals, start, window, gap, per_period)
             for start in ordinals
@@ -714,13 +709,7 @@ def _(
         build_respondent_profiles.run(**build_sandbox)
         _profiles = build_sandbox["self"].output.base_profiles
 
-        # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each
-        # iteration seeing its own profile via parent._current_item.
-        # The criteria the scorer reads off flow.input; {} would also work
-        # (every knob falls back to its default), this exercises the wiring.
-        # Bracket N demands N quizzes PER SUB-PERIOD -- at 7 days over 30, that
-        # is 4N a month -- so the ladder is generated from the three knobs
-        # rather than spelled out one entry at a time.
+        # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each iteration seeing its own profile via parent._current_item. The criteria the scorer reads off flow.input; {} would also work (every knob falls back to its default), this exercises the wiring. Bracket N demands N quizzes PER SUB-PERIOD -- at 7 days over 30, that is 4N a month -- so the ladder is generated from the three knobs rather than spelled out one entry at a time.
         _criteria = {
             "sustained_engagement_level_criteria": {
                 "levels": [
@@ -792,9 +781,7 @@ def _(test_stack):
 
 @app.cell
 def _(result, run_tests, select_user):
-    # Scorer results carry only respondent_id, so find the selected user in the
-    # PROFILES (which hold the email) and take the results at the same position
-    # -- the lists are built in lockstep, one entry per respondent.
+    # Scorer results carry only respondent_id, so find the selected user in the PROFILES (which hold the email) and take the results at the same position -- the lists are built in lockstep, one entry per respondent.
     _selected_index = (
         next(
             (

@@ -1,27 +1,12 @@
 # Collect every iteration's record out of a foreach loop.
-#
-# A PARALLEL foreach gives each iteration its own copy of flow state and merges
-# the copies back by whole-object replacement, so anything a logic block writes
-# to shared state is overwritten by whichever branch commits last. Measured on a
-# 40-iteration run: a flow.private list kept 8 records (one per concurrency
-# batch) and per-iteration system.context keys kept 1 (one per run), with every
-# iteration completed and no errors. The records were produced and then lost in
-# the merge.
-#
-# `parent.<loop_name>.output` is the surface that does expose all of them: every
-# node execution from every iteration, flattened in completion order, each
-# wrapped in its own single-element list --
-#
+
+# A PARALLEL foreach gives each iteration its own copy of flow state and merges the copies back by whole-object replacement, so anything a logic block writes to shared state is overwritten by whichever branch commits last. Measured on a 40-iteration run: a flow.private list kept 8 records (one per concurrency batch) and per-iteration system.context keys kept 1 (one per run), with every iteration completed and no errors. The records were produced and then lost in the merge.
+
+# `parent.<loop_name>.output` is the surface that does expose all of them: every node execution from every iteration, flattened in completion order, each  wrapped in its own single-element list --
 #     [[node_a], [node_b], [node_c], [node_a], [node_b], [node_c], ...]
-#
-# so an N-node loop body yields N entries per iteration. Note this is different
-# from `parent.<loop_name>.<node_name>.output.<field>`, which resolves to a
-# single node's *current* value, i.e. the last branch to commit -- one record,
-# not all of them.
-#
-# This builds a script node that walks that aggregate and pulls out one record
-# per iteration:
-#
+
+# So an N-node loop body yields N entries per iteration. Note this is different from `parent.<loop_name>.<node_name>.output.<field>`, which resolves to a single node's *current* value, i.e. the last branch to commit -- one record, not all of them. This builds a script node that walks that aggregate and pulls out one record per iteration:
+
 #     from src.helpers.foreach_collector import foreach_collector
 #
 #     collect = foreach_collector(
@@ -33,21 +18,15 @@
 #     )
 #     node = collect(aflow, output_schema=CollectedOutput)
 #     aflow.sequence(START, build, each, node, table, END)
-#
-# Records are identified by KEY, not position: an entry qualifies if it carries
-# `record_key`. Nodes can be added to or reordered within the loop body without
-# touching the collector.
-#
-# The node must sit OUTSIDE the loop. It reads by expression rather than through
-# an edge, but it still has to run after the loop and before whatever consumes
-# it, so keep it in the sequence.
+
+# Records are identified by KEY, not position: an entry qualifies if it carries `record_key`. Nodes can be added to or reordered within the loop body without touching the collector.
+
+# The node must sit OUTSIDE the loop. It reads by expression rather than through an edge, but it still has to run after the loop and before whatever consumes it, so keep it in the sequence.
 
 from src.helpers.logic_block import LogicBlock
 
-# Emitted verbatim into the script node. `{loop_name}` etc. are filled in by
-# str.replace rather than .format(), since the body contains literal braces and
-# str.format() is unavailable in the sandbox anyway.
-_TEMPLATE = '''
+# Emitted verbatim into the script node. `{loop_name}` etc. are filled in by str.replace rather than .format(), since the body contains literal braces and str.format() is unavailable in the sandbox anyway.
+_TEMPLATE = """
 collected = parent.__LOOP_NAME__.output
 
 # Every node execution from every iteration, flattened, each in its own
@@ -87,13 +66,10 @@ indexed.sort(key=lambda r: r["iteration_index"])
 self.output.__OUTPUT_FIELD__ = [r["value"] for r in indexed + unindexed]
 self.output.collected_num = len(records)
 self.output.collected_indices = [r["iteration_index"] for r in indexed]
-'''
+"""
 
-# Used when no record_key is given: keep every node execution rather than the one
-# node's record. Nothing identifies an iteration here, so there is no per-iteration
-# grouping and no reordering -- the aggregate is flattened and returned as-is, in
-# completion order. Useful for inspecting what a loop actually emitted.
-_TEMPLATE_ALL = '''
+# Used when no record_key is given: keep every node execution rather than the one node's record. Nothing identifies an iteration here, so there is no per-iteration grouping and no reordering -- the aggregate is flattened and returned as-is, in completion order. Useful for inspecting what a loop actually emitted.
+_TEMPLATE_ALL = """
 collected = parent.__LOOP_NAME__.output
 
 # Every node execution from every iteration, flattened out of the single-element
@@ -119,7 +95,7 @@ self.output.collected_indices = [
     for entry in records
     if isinstance(entry.get("__INDEX_KEY__"), int)
 ]
-'''
+"""
 
 
 def foreach_collector(

@@ -99,16 +99,14 @@ def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    # Drop existing tables before reloading them from CSV. Compare the string, since
-    # bool("False") is True.
+    # Drop existing tables before reloading them from CSV. Compare the string, since bool("False") is True.
     rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
     print(f"Rewrite tables: {rewrite_tables}")
 
     TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
 
-    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
-    # in the directory and it gets loaded without touching this cell.
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV in the directory and it gets loaded without touching this cell.
     table_csvs = sorted(TABLES_DIR.glob("*.csv"))
     print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
@@ -210,7 +208,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -224,7 +222,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -238,7 +236,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
 
@@ -258,7 +256,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
 
@@ -270,7 +268,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (account_ids_unique,)
 
@@ -282,7 +280,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (user_emails,)
 
@@ -428,8 +426,7 @@ def build_respondent_profiles(flow, self, parent, json):
             self.output.profiles_num  -- how many were built
             self.output.uploaded_num  -- upload counter, zeroed for this run"""
 
-    # Normally a bare list of {"table": ..., "rows": [...]} entries, but a
-    # caller passing a retrieval node's context through verbatim wraps it.
+    # Normally a bare list of {"table": ..., "rows": [...]} entries, but a caller passing a retrieval node's context through verbatim wraps it.
     flow_input = flow["input"] or {}
     tables = flow_input.get("retrieved_tables")
     if isinstance(tables, dict):
@@ -454,8 +451,7 @@ def build_respondent_profiles(flow, self, parent, json):
             return value.strip().lower() in ("true", "1", "yes", "t")
         return bool(value)
 
-    # Tags are stored as JSON-array strings ('["a","b"]') but may also arrive
-    # as a real list, empty, or "[]". Normalise to a list or None.
+    # Tags are stored as JSON-array strings ('["a","b"]') but may also arrive as a real list, empty, or "[]". Normalise to a list or None.
     def parse_tags(value):
         if value is None:
             return None
@@ -477,8 +473,7 @@ def build_respondent_profiles(flow, self, parent, json):
     details = by_table.get("details") or []
     quiz_meta = by_table.get("quiz_meta") or []
 
-    # Step 1: quiz context keyed by quiz_id, nesting the flat prize.* columns
-    # into a `prize` object.
+    # Step 1: quiz context keyed by quiz_id, nesting the flat prize.* columns into a `prize` object.
     ctx = {}
     for m in quiz_meta:
         qid = m.get("quiz_id")
@@ -519,10 +514,7 @@ def build_respondent_profiles(flow, self, parent, json):
             }
         )
 
-    # Step 3: group scoring by respondent (email), bucketing per quiz. One
-    # scoring row == one submission. `quiz_index` maps quiz_id -> bucket within
-    # the current respondent, so repeat submissions accumulate rather than
-    # opening a second bucket for the same quiz.
+    # Step 3: group scoring by respondent (email), bucketing per quiz. One scoring row == one submission. `quiz_index` maps quiz_id -> bucket within the current respondent, so repeat submissions accumulate rather than opening a second bucket for the same quiz.
     profiles = {}
     order = []
     for s in scoring:
@@ -531,8 +523,7 @@ def build_respondent_profiles(flow, self, parent, json):
         if key not in profiles:
             profiles[key] = {
                 "respondent_id": s.get("submission_id"),
-                # Sourced from quiz_meta via ctx (scoring rows carry no
-                # account_id); filled from the first quiz row that resolves.
+                # Sourced from quiz_meta via ctx (scoring rows carry no account_id); filled from the first quiz row that resolves.
                 "account_id": None,
                 "identity": {
                     "display_name": s.get("display_name"),

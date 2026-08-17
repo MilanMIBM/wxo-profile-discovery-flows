@@ -1,17 +1,11 @@
 # Author script nodes as real functions instead of strings.
-#
-# A script node's body is a Python *source string* the flow engine execs in a
-# restricted sandbox with `flow`, `self`, `parent` and `json` pre-injected.
-# Written as a string it gets no highlighting, no linting, and -- inside marimo
-# -- the formatter re-indents string contents to match the cell body, flattening
-# nested blocks into invalid Python.
-#
-# @logic_block lifts the body back out as source via inspect + dedent. Because
-# the body is dedented as a unit, marimo can re-indent the cell however it likes
-# and the extracted script stays valid.
-#
+
+# A script node's body is a Python *source string* the flow engine execs in a restricted sandbox with `flow`, `self`, `parent` and `json` pre-injected. Written as a string it gets no highlighting, no linting, and -- inside marimo -- the formatter re-indents string contents to match the cell body, flattening nested blocks into invalid Python.
+
+# @logic_block lifts the body back out as source via inspect + dedent. Because the body is dedented as a unit, marimo can re-indent the cell however it likes and the extracted script stays valid.
+
 # Define once, in its own cell, with the same node metadata aflow.script() takes:
-#
+
 #     @logic_block(
 #         display_name="Build respondent profiles",
 #         description="Collapses the flat quiz tables into one profile each.",
@@ -21,15 +15,14 @@
 #         node_out = flow.get("retrieved_tables") or {}
 #         ...
 #         self.output.profiles = records
-#
+
 # Then attach it to any flow, sub-flow, foreach or parallel scope by calling it:
-#
+
 #     build = build_respondent_profiles(aflow)
 #     stage = stage_current_profile(each_profile)
 #     aflow.sequence(START, retrieve, build, ...)
-#
-# The sandbox names are declared as parameters purely so linters resolve them;
-# the engine injects them, so the function is never really called that way.
+
+# The sandbox names are declared as parameters purely so linters resolve them; the engine injects them, so the function is never really called that way.
 
 import ast
 import inspect
@@ -75,8 +68,7 @@ class LogicBlock:
         self._node_kwargs = {k: v for k, v in node_kwargs.items() if v is not None}
         self.name = name or fn.__name__
         self.script = _extract_body(fn)
-        # A docstring documents the block; reuse it as the node description when
-        # none was given explicitly.
+        # A docstring documents the block; reuse it as the node description when none was given explicitly.
         if "description" not in self._node_kwargs and fn.__doc__:
             self._node_kwargs["description"] = inspect.cleandoc(fn.__doc__)
         self.__doc__ = fn.__doc__
@@ -138,8 +130,7 @@ def _extract_body(fn) -> str:
             "but not in a bare REPL or exec'd string."
         ) from exc
 
-    # Parse to find where the body starts, so decorators, multi-line signatures
-    # and a leading docstring are all dropped reliably.
+    # Parse to find where the body starts, so decorators, multi-line signatures and a leading docstring are all dropped reliably.
     fn_node = ast.parse(src).body[0]
     if not isinstance(fn_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         raise TypeError(
@@ -158,8 +149,7 @@ def _extract_body(fn) -> str:
         raise ValueError(f"logic block {fn.__name__!r} has an empty body")
 
     lines = src.splitlines()
-    # ast line numbers are 1-based; decorators sit above the def, so the first
-    # body statement's lineno is the correct cut point.
+    # ast line numbers are 1-based; decorators sit above the def, so the first body statement's lineno is the correct cut point.
     start = body[0].lineno - 1
     end = max(stmt.end_lineno for stmt in body)
     return textwrap.dedent("\n".join(lines[start:end])).rstrip() + "\n"

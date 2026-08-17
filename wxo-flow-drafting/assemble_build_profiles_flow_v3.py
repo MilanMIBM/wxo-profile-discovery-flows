@@ -128,16 +128,14 @@ def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    # Drop existing tables before reloading them from CSV. Compare the string, since
-    # bool("False") is True.
+    # Drop existing tables before reloading them from CSV. Compare the string, since bool("False") is True.
     rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
     print(f"Rewrite tables: **{rewrite_tables}**")
 
     TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
 
-    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
-    # in the directory and it gets loaded without touching this cell.
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV in the directory and it gets loaded without touching this cell.
     table_csvs = sorted(TABLES_DIR.glob("*.csv"))
     print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
@@ -167,9 +165,7 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(
-                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
-                )
+                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -204,9 +200,7 @@ def _():
 
 @app.cell
 def _(retrieve_number, select_account):
-    filter_stack = mo.hstack(
-        [select_account, retrieve_number], justify="space-around"
-    )
+    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
     # filter_stack
     return (filter_stack,)
 
@@ -244,7 +238,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -258,7 +252,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -272,7 +266,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
 
@@ -292,7 +286,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
 
@@ -304,7 +298,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (account_ids_unique,)
 
@@ -316,7 +310,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (user_emails,)
 
@@ -359,11 +353,7 @@ def _(quiz_ids_unique):
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = (
-        df.to_dicts()
-        if hasattr(df, "to_dicts")
-        else df.to_dict(orient="records")
-    )
+    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
@@ -388,16 +378,10 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return (
-                None
-                if val != val or val in (float("inf"), float("-inf"))
-                else val
-            )
+            return None if val != val or val in (float("inf"), float("-inf")) else val
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(
-            val, (datetime.datetime, datetime.date, datetime.time)
-        ):
+        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -583,9 +567,7 @@ def _():
         scorer needs a field on MergeProfileInputs and a map_input in the flow,
         nothing in this body."""
 
-        enriched_profile = dict(
-            parent.stage_profile_inputs.output.profile or {}
-        )
+        enriched_profile = dict(parent.stage_profile_inputs.output.profile or {})
 
         ### Ay additional scorer nodes added should be appended into scorers
         scorers = {
@@ -603,9 +585,7 @@ def _():
         for scorer_name, result in inputs.items():
             if result is None:
                 continue
-            if isinstance(result, dict) and isinstance(
-                result.get("result"), dict
-            ):
+            if isinstance(result, dict) and isinstance(result.get("result"), dict):
                 result = result["result"]
             analysis[scorer_name] = result
 
@@ -613,10 +593,7 @@ def _():
         enriched_record = dict(enriched_profile)
         enriched_record["analysis"] = analysis
 
-        # Nothing is written to shared state here. Both flow.private and
-        # system.context collapse concurrent branch writes on merge-back (40
-        # iterations -> 8 and 1 record respectively), so the record leaves this node
-        # only as its own output; collect_enriched_profiles reads it from outside.
+        # Nothing is written to shared state here. Both flow.private and system.context collapse concurrent branch writes on merge-back (40 iterations -> 8 and 1 record respectively), so the record leaves this node only as its own output; collect_enriched_profiles reads it from outside.
         self.output.enriched_profile = enriched_record
         self.output.preview_inputs = inputs
         self.output.iteration_index = parent._current_index
@@ -656,9 +633,7 @@ def _():
 
 @app.cell
 def _():
-    # The collector is generic: `parent.<loop>.output` is the only surface that
-    # exposes every iteration, and walking it differs between flows only by which
-    # loop and which record key. See src/helpers/foreach_collector.py.
+    # The collector is generic: `parent.<loop>.output` is the only surface that exposes every iteration, and walking it differs between flows only by which loop and which record key. See src/helpers/foreach_collector.py.
     collect_enriched_profiles = foreach_collector(
         loop_name="each_respondent",
         record_key="enriched_profile",
@@ -712,9 +687,7 @@ def _():
         naming scorers) and stops at one level, so a scorer's own nested result
         stays whole in its cell."""
 
-        # collect_enriched_profiles sits outside the loop and pulls the records from
-        # the loop's node outputs; profiles_num is written before the loop, so the two
-        # counts differing means records were lost getting out of the foreach.
+        # collect_enriched_profiles sits outside the loop and pulls the records from the loop's node outputs; profiles_num is written before the loop, so the two counts differing means records were lost getting out of the foreach.
         expected = parent.build_respondent_profiles.output.profiles_num or 0
 
         collected = flow.collect_enriched_profiles.output.enriched_profiles
@@ -895,9 +868,7 @@ def _(
             each, output_schema=SustainedEngagementOutput
         )
 
-        brand_fan = likely_long_term_brand_fan(
-            each, output_schema=BrandFanOutput
-        )
+        brand_fan = likely_long_term_brand_fan(each, output_schema=BrandFanOutput)
 
         merge = merge_profile_signals(
             each,
@@ -969,11 +940,7 @@ def _(flow_name):
 
 @app.cell
 def _():
-    # This flow is script nodes only, so there is nothing to import ahead of it.
-    # Any tool node added later must have its source listed here: the compiled
-    # spec references tools BY NAME, and an unimported tool silently resolves to
-    # nothing at runtime. Dependencies come from the tool's own inline
-    # `# /// dependencies = [...] # ///` block.
+    # This flow is script nodes only, so there is nothing to import ahead of it.  Any tool node added later must have its source listed here: the compiled  spec references tools BY NAME, and an unimported tool silently resolves to  nothing at runtime. Dependencies come from the tool's own inline `# /// dependencies = [...] # ///` block.
     TOOL_SOURCES = []
     return (TOOL_SOURCES,)
 
@@ -1022,10 +989,7 @@ def _(FLOW_SPEC_PATH, TOOL_SOURCES):
         if dry_run:
             return None
 
-        # Tools first, and overwritten every time: the flow spec points at them by
-        # name, so a stale or missing tool leaves the flow's tool node unresolved.
-        # import_tools_to_wxo dedupes by resolved path, so TOOL_SOURCES and the
-        # auto-resolved paths can overlap without importing anything twice.
+        # Tools first, and overwritten every time: the flow spec points at them by name, so a stale or missing tool leaves the flow's tool node unresolved.  import_tools_to_wxo dedupes by resolved path, so TOOL_SOURCES and the auto-resolved paths can overlap without importing anything twice.
         sources = list(tool_sources or TOOL_SOURCES)
         if namespace is not None:
             resolved, unresolved = resolve_tool_sources(aflow, namespace)
@@ -1122,9 +1086,7 @@ def _(flow_name, flow_selection):
         value=(
             flow_name
             if flow_name in flow_selection
-            else (
-                next(iter(flow_selection)) if len(flow_selection) > 0 else None
-            )
+            else (next(iter(flow_selection)) if len(flow_selection) > 0 else None)
         ),
     )
     return (flow_selection_dropdown,)

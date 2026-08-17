@@ -95,16 +95,14 @@ def _(postgresql_engine):
     from sqlalchemy import text, inspect
     from sqlalchemy.dialects.postgresql import JSONB
 
-    # Drop existing tables before reloading them from CSV. Compare the string, since
-    # bool("False") is True.
+    # Drop existing tables before reloading them from CSV. Compare the string, since bool("False") is True.
     rewrite_tables = os.getenv("REWRITE_TABLES", "false").lower() == "true"
     print(f"Rewrite tables: {rewrite_tables}")
 
     TABLES_DIR = Path("src/data/tables")
     existing = set(inspect(postgresql_engine).get_table_names())
 
-    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV
-    # in the directory and it gets loaded without touching this cell.
+    # One table per CSV in TABLES_DIR, named after the file stem -- drop a new CSV in the directory and it gets loaded without touching this cell.
     table_csvs = sorted(TABLES_DIR.glob("*.csv"))
     print(f"Found {len(table_csvs)} CSV(s) in {TABLES_DIR}")
 
@@ -484,8 +482,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
     min_quizzes = int(criteria.get("min_quizzes") or 2)
     success_pct = float(criteria.get("success_pct") or 60)
 
-    # ISO date -> integer day count, so date gaps become plain subtraction.
-    # Only the leading YYYY-MM-DD is read, so full timestamps work too.
+    # ISO date -> integer day count, so date gaps become plain subtraction. Only the leading YYYY-MM-DD is read, so full timestamps work too.
     def epoch_day(value):
         if not value:
             return None
@@ -494,8 +491,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         except ValueError:
             return None
 
-    # One completion per distinct quiz_id -- its earliest submission, carrying
-    # the named `extra` fields (here the score) from that same row.
+    # One completion per distinct quiz_id -- its earliest submission, carrying the named `extra` fields (here the score) from that same row.
     def earliest_completions(rows, key="quiz_id", date_field="submitted_at", extra=()):
         out = {}
         for row in rows:
@@ -511,8 +507,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
                 out[key_val] = record
         return out
 
-    # 100 * sum(correct)/sum(answered). None when nothing was answered, so
-    # "no data" stays distinct from a real 0%.
+    # 100 * sum(correct)/sum(answered). None when nothing was answered, so "no data" stays distinct from a real 0%.
     def pooled_success_rate(items, correct_field="correct", answered_field="answered"):
         correct = sum(int(i.get(correct_field) or 0) for i in items)
         answered = sum(int(i.get(answered_field) or 0) for i in items)
@@ -525,8 +520,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         rows, extra=["correct_answers", "total_answered"]
     )
 
-    # Step 2: per-quiz record (day, brand, prize, correct, answered).
-    # `answered` falls back to `correct` when total_answered is absent.
+    # Step 2: per-quiz record (day, brand, prize, correct, answered), `answered` falls back to `correct` when total_answered is absent.
     quiz = {}
     for quiz_id, c in completions.items():
         correct = int(c.get("correct_answers") or 0)
@@ -548,9 +542,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
             continue
         by_brand.setdefault(q["brand"], []).append(q)
 
-    # Step 4: evaluate EVERY brand and describe the ones that qualify. The
-    # window test only decides IF a brand qualifies; the reported stats then
-    # summarise all of that brand's distinct completed quizzes.
+    # Step 4: evaluate EVERY brand and describe the ones that qualify. The window test only decides IF a brand qualifies; the reported stats then summarise all of that brand's distinct completed quizzes.
     brands = []
     for brand_name, qs in sorted(by_brand.items()):
         ords = [q["ord"] for q in qs]
@@ -569,8 +561,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         if not qualifies:
             continue
 
-        # Prizes this respondent actually played for under this brand:
-        # de-duplicated, blanks dropped, first-seen order preserved.
+        # Prizes this respondent actually played for under this brand: de-duplicated, blanks dropped, first-seen order preserved.
         prizes = []
         for q in sorted(qs, key=lambda q: q["ord"]):
             name = q.get("prize_name")
@@ -581,8 +572,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         brands.append(
             {
                 brand_name: {
-                    # Pooled across the brand's distinct quizzes, as a
-                    # percentage rounded to 2dp. None only if nothing answered.
+                    # Pooled across the brand's distinct quizzes, as a percentage rounded to 2dp. None only if nothing answered.
                     "average_success_rate": (
                         round(overall, 2) if overall is not None else None
                     ),
@@ -601,8 +591,7 @@ def likely_long_term_brand_fan(flow, self, parent, json, datetime):
         "likely_long_term_brand_fan": brands,
     }
 
-    # Each field is published three ways -- raw, wrapped as a single-key dict,
-    # and inside `result` -- so a data map can bind whichever shape it needs.
+    # Each field is published three ways -- raw, wrapped as a single-key dict, and inside `result` -- so a data map can bind whichever shape it needs.
     self.output.respondent_id = respondent_id
 
     self.output.likely_long_term_brand_fan = brands
@@ -731,10 +720,7 @@ def _(
         build_respondent_profiles.run(**build_sandbox)
         _profiles = build_sandbox["self"].output.base_profiles
 
-        # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each
-        # iteration seeing its own profile via parent._current_item.
-        # The criteria the scorer reads off flow.input; {} would also work
-        # (every knob falls back to its default), this exercises the wiring.
+        # ...then the scorer runs ONCE PER PROFILE, as the foreach does, each iteration seeing its own profile via parent._current_item. The criteria the scorer reads off flow.input; {} would also work (every knob falls back to its default), this exercises the wiring.
         _criteria = {
             "likely_long_term_brand_fan_criteria": {
                 "window_days": int(test_window_days.value),
@@ -800,9 +786,7 @@ def _(test_stack):
 
 @app.cell
 def _(result, run_tests, select_user):
-    # Scorer results carry only respondent_id, so find the selected user in the
-    # PROFILES (which hold the email) and take the results at the same position
-    # -- the lists are built in lockstep, one entry per respondent.
+    # Scorer results carry only respondent_id, so find the selected user in the PROFILES (which hold the email) and take the results at the same position -- the lists are built in lockstep, one entry per respondent.
     _selected_index = (
         next(
             (
