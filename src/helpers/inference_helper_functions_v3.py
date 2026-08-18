@@ -1274,6 +1274,244 @@ class InferenceClient:
 
         return None
 
+    def run_wxo_flow_async(
+        self,
+        flow_id: str,
+        flow_input: Optional[Dict[str, Any]] = None,
+        callback_url: Optional[str] = None,
+        thread_id: Optional[str] = None,
+        instance_id: Optional[str] = None,
+        environment_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        agent_version: Optional[str] = None,
+        execution_summary: Optional[bool] = None,
+        auto_retrieve: bool = False,
+        retrieve_interval: float = 5.0,
+        max_checks: int = 12,
+        retries: int = 0,
+        retry_delay: float = 0.0,
+        progress_bar: Optional[bool] = None,
+        **kwargs: Any,
+    ) -> Optional["WXOFlowRun"]:
+        """
+        Submit a WXO flow run asynchronously and return a handle to its result.
+
+        Uses POST /v1/orchestrate/flows/{flow_id}/run/async (relative to the
+        versioned base_url, which already includes the "/orchestrate" segment for
+        remote instances). Unlike ``run_wxo_flow``, this returns as soon as the
+        server accepts the request - the response carries only an ``instance_id``,
+        and the flow output arrives later either at your ``callback_url`` or via
+        polling the flow-instances endpoint.
+
+        The return value is a ``WXOFlowRun`` handle, so retrieval hangs off the
+        same variable the call was made on::
+
+            run = inf.run_wxo_flow_async("my-flow-id", {"x": 1})
+            run.instance_id                 # available immediately
+            run.check()                     # one non-blocking poll -> result or None
+            run.retrieve()                  # manual blocking wait -> result or None
+            run.result                      # cached output once retrieved
+
+        Set ``auto_retrieve=True`` to poll before returning, so the call behaves
+        synchronously while still using the async endpoint::
+
+            run = inf.run_wxo_flow_async(
+                "my-flow-id", {"x": 1},
+                auto_retrieve=True, retrieve_interval=5, max_checks=12,
+            )
+            run.result
+
+        Parameters
+        ----------
+        flow_id:
+            The flow ID to run (required).
+        flow_input:
+            The input defined by the flow model, sent as the JSON request body.
+            Defaults to an empty object.
+        callback_url:
+            Optional URL the server POSTs the flow output to when the run
+            finishes (``callbackUrl`` header). The callback body is
+            ``{"data": <flow output>}`` on success or
+            ``{"error": {"data": {"message": ...}}}`` on failure. Supplying this
+            does not disable polling - ``check`` / ``retrieve`` still work, so you
+            can use whichever arrives first.
+        thread_id:
+            Optional watsonx Orchestrate message thread ID
+            (x-ibm-wxo-thread-id header). Note this differs from the header used
+            by the synchronous ``run_wxo_flow`` (x-ibm-thread-id), per the async
+            endpoint spec.
+        instance_id:
+            Optional existing flow execution instance ID to resume a previous
+            execution (x-ibm-flow-instance-id header). Only pass this when
+            resuming.
+        environment_id:
+            Optional target environment ID - "draft" or "live"
+            (x-ibm-environment-id header).
+        agent_id:
+            Optional caller agent ID (x-ibm-agent-id header).
+        agent_version:
+            Optional caller agent version (x-ibm-agent-version header).
+        execution_summary:
+            When True, generate the flow execution summary
+            (x-ibm-flow-execution-summary header). Defaults to false server-side.
+        auto_retrieve:
+            When True, poll for the result before returning, using
+            ``retrieve_interval`` and ``max_checks``. The handle is still
+            returned either way - inspect ``run.result`` / ``run.state`` to see
+            whether the run finished within the budget.
+        retrieve_interval:
+            Seconds to wait between polls (default 5.0). Also the default used by
+            ``WXOFlowRun.retrieve`` when called manually.
+        max_checks:
+            Maximum number of polls before giving up and returning the handle
+            unresolved (default 12). Values below 1 are treated as 1. Giving up
+            does not cancel the flow - the run continues server-side and can be
+            retrieved later from the same handle.
+        retries:
+            Number of extra submission attempts after the first one fails
+            (default 0). Same semantics as ``run_wxo_flow``: HTTP 4xx responses
+            are capped at a single retry, since repeating an identical rejected
+            request rarely helps. HTTP 409 ("flow execution already in progress")
+            is never retried - the run is already underway, so resubmitting only
+            produces another rejection.
+        retry_delay:
+            Seconds to wait between submission attempts (default 0.0). Ignored
+            when ``retries`` resolves to 0.
+        progress_bar:
+            Show a marimo progress bar while polling (auto_retrieve only).
+            Defaults to the instance ``self.progress_bar`` setting.
+
+        Returns
+        -------
+        A ``WXOFlowRun`` handle on successful submission, None once every attempt
+        has failed or the client is missing.
+        """
+        wxo_client = self.client
+        if not wxo_client:
+            return None
+        if not flow_id:
+            print("run_wxo_flow_async: flow_id is required")
+            return None
+
+        try:
+            max_retries = max(int(retries), 0)
+        except TypeError, ValueError:
+            print(
+                f"run_wxo_flow_async: retries must be an integer, got {retries!r}. "
+                "Using 0."
+            )
+            max_retries = 0
+
+        url = f"{wxo_client['base_url']}/flows/{flow_id}/run/async"
+
+        headers = dict(wxo_client["headers"])
+        if callback_url is not None:
+            headers["callbackUrl"] = callback_url
+        if thread_id is not None:
+            headers["x-ibm-wxo-thread-id"] = thread_id
+        if instance_id is not None:
+            headers["x-ibm-flow-instance-id"] = instance_id
+        if environment_id is not None:
+            headers["x-ibm-environment-id"] = environment_id
+        if agent_id is not None:
+            headers["x-ibm-agent-id"] = agent_id
+        if agent_version is not None:
+            headers["x-ibm-agent-version"] = agent_version
+        if execution_summary is not None:
+            headers["x-ibm-flow-execution-summary"] = str(execution_summary).lower()
+
+        # Submission only needs to survive until the server acks the request, so a
+        # short fixed deadline is enough - the flow itself runs past this call.
+        kwargs.setdefault("timeout", 60)
+
+        total_attempts = max_retries + 1
+        submitted: Optional[Dict[str, Any]] = None
+
+        for attempt in range(1, total_attempts + 1):
+            try:
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json=flow_input or {},
+                    verify=certifi.where(),
+                    **kwargs,
+                )
+                response.raise_for_status()
+                submitted = response.json()
+                break
+            except Exception as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                # 409 means this flow is already running - resubmitting cannot
+                # succeed, so stop immediately regardless of the retry budget.
+                if status == 409:
+                    print(
+                        f"run_wxo_flow_async error: {e} - flow execution already in "
+                        "progress, not retrying"
+                    )
+                    return None
+
+                is_client_error = status is not None and 400 <= status < 500
+                allowed_attempts = (
+                    min(total_attempts, 2) if is_client_error else total_attempts
+                )
+
+                if attempt < allowed_attempts:
+                    print(
+                        f"run_wxo_flow_async error (attempt {attempt}/{allowed_attempts}): "
+                        f"{e} - retrying{f' in {retry_delay}s' if retry_delay else ''}"
+                    )
+                    if retry_delay:
+                        import time
+
+                        time.sleep(retry_delay)
+                    continue
+
+                if total_attempts > 1:
+                    capped = " - HTTP 4xx, capped at 1 retry" if is_client_error else ""
+                    print(
+                        f"run_wxo_flow_async error (attempt {attempt}/{allowed_attempts}, "
+                        f"giving up{capped}): {e}"
+                    )
+                else:
+                    print(f"run_wxo_flow_async error: {e}")
+                return None
+
+        if submitted is None:
+            return None
+
+        # The spec returns {"instance_id": ...}; fall back to the resume header
+        # value so the handle stays pollable even if the body shape differs.
+        new_instance_id = None
+        if isinstance(submitted, dict):
+            new_instance_id = submitted.get("instance_id") or submitted.get("id")
+        new_instance_id = new_instance_id or instance_id
+
+        if not new_instance_id:
+            print(
+                "run_wxo_flow_async: submission accepted but no instance_id was "
+                f"returned (response: {submitted!r}). Polling is unavailable; rely "
+                "on the callback URL if one was supplied."
+            )
+
+        run = WXOFlowRun(
+            client=self,
+            flow_id=flow_id,
+            instance_id=new_instance_id,
+            callback_url=callback_url,
+            submit_response=submitted,
+            default_interval=retrieve_interval,
+            default_max_checks=max_checks,
+        )
+
+        if auto_retrieve:
+            run.retrieve(
+                interval=retrieve_interval,
+                max_checks=max_checks,
+                progress_bar=progress_bar,
+            )
+
+        return run
+
     # ---------------------------------------------------------------------------
     # Iterative inference loop
     # ---------------------------------------------------------------------------
@@ -1579,3 +1817,295 @@ class InferenceClient:
             "completion_tokens": total_completion,
             "total_tokens": total,
         }
+
+
+class WXOFlowRun:
+    """
+    Handle for a WXO flow submitted via ``InferenceClient.run_wxo_flow_async``.
+
+    The async endpoint returns only an ``instance_id``; the flow output arrives
+    later. This object carries the submission details and the retrieval methods
+    so everything hangs off the variable the run was started on::
+
+        run = inf.run_wxo_flow_async("my-flow-id", {"x": 1})
+        run.instance_id       # immediately available
+        run.check()           # single non-blocking poll -> output or None
+        run.retrieve()        # blocking wait -> output or None
+        run.result            # cached output once finished
+        run.state             # "in_progress" / "completed" / "failed" / ...
+        run.done              # True once completed or failed
+        run.error             # error message when the run failed
+
+    Two retrieval routes are supported, and they cooperate:
+
+    - **Polling** (``check`` / ``retrieve``) queries the flow-instances endpoint
+      for this ``instance_id``. This works with no extra infrastructure and is
+      what ``auto_retrieve`` uses.
+    - **Callback** - if you passed ``callback_url`` at submission, WXO POSTs the
+      result to that URL as ``{"data": ...}`` or
+      ``{"error": {"data": {"message": ...}}}``. Your receiver can hand that body
+      straight to ``ingest_callback(body)`` to resolve this handle without
+      polling. Whichever route completes first wins; the other becomes a no-op
+      because the handle is already resolved.
+    """
+
+    # Instance-object keys that have been observed to carry the flow output. The
+    # list-flow-instances response shape is not fully specified, so read
+    # defensively rather than binding to a single key.
+    _OUTPUT_KEYS = ("output", "result", "flow_output", "data", "outputs")
+    _ERROR_KEYS = ("error", "error_message", "message", "failure_reason")
+    _STATE_KEYS = ("state", "status", "flow_state")
+
+    _TERMINAL_STATES = ("completed", "failed", "interrupted")
+
+    def __init__(
+        self,
+        client: "InferenceClient",
+        flow_id: str,
+        instance_id: Optional[str],
+        callback_url: Optional[str] = None,
+        submit_response: Optional[Dict[str, Any]] = None,
+        default_interval: float = 5.0,
+        default_max_checks: int = 12,
+    ):
+        self.client = client
+        self.flow_id = flow_id
+        self.instance_id = instance_id
+        self.callback_url = callback_url
+        self.submit_response = submit_response or {}
+        self.default_interval = default_interval
+        self.default_max_checks = default_max_checks
+
+        self.result: Optional[Any] = None
+        self.error: Optional[str] = None
+        self.state: Optional[str] = None
+        self.instance: Optional[Dict[str, Any]] = None
+        self.checks_performed: int = 0
+
+    def __repr__(self) -> str:
+        return (
+            f"WXOFlowRun(flow_id={self.flow_id!r}, instance_id={self.instance_id!r}, "
+            f"state={self.state!r}, done={self.done})"
+        )
+
+    @property
+    def done(self) -> bool:
+        """True once the run has reached a terminal state or a result/error landed."""
+        if self.result is not None or self.error is not None:
+            return True
+        return (self.state or "").lower() in self._TERMINAL_STATES
+
+    @property
+    def succeeded(self) -> bool:
+        """True when the run finished without an error."""
+        return self.done and self.error is None
+
+    @staticmethod
+    def _first_key(source: Dict[str, Any], keys) -> Optional[Any]:
+        """Return the first non-empty value among ``keys`` in ``source``."""
+        for key in keys:
+            value = source.get(key)
+            if value not in (None, "", {}, []):
+                return value
+        return None
+
+    def _absorb_instance(self, instance: Dict[str, Any]) -> None:
+        """Update this handle from one flow-instance dict."""
+        self.instance = instance
+        state = self._first_key(instance, self._STATE_KEYS)
+        if isinstance(state, str):
+            self.state = state
+
+        normalised = (self.state or "").lower()
+
+        if normalised in ("failed", "interrupted"):
+            err = self._first_key(instance, self._ERROR_KEYS)
+            if isinstance(err, dict):
+                # Mirrors the callback error shape: {"data": {"message": ...}}
+                data = err.get("data")
+                if isinstance(data, dict) and data.get("message"):
+                    err = data["message"]
+                else:
+                    err = err.get("message") or str(err)
+            self.error = str(err) if err is not None else f"flow run {normalised}"
+
+        if normalised == "completed" or self.result is None:
+            output = self._first_key(instance, self._OUTPUT_KEYS)
+            if output is not None:
+                self.result = output
+
+    def ingest_callback(self, body: Dict[str, Any]) -> Optional[Any]:
+        """
+        Resolve this handle from a callback payload posted by WXO.
+
+        Pass the JSON body your ``callback_url`` receiver got, exactly as sent:
+        ``{"data": <flow output>}`` on success, or
+        ``{"error": {"data": {"message": ...}}}`` on failure. Use this instead of
+        polling when you have a receiver; the handle ends up in the same state
+        either way.
+
+        Returns the flow output, or None when the payload carried an error.
+        """
+        if not isinstance(body, dict):
+            print(f"ingest_callback: expected a dict body, got {type(body).__name__}")
+            return None
+
+        err = body.get("error")
+        if err:
+            message = None
+            if isinstance(err, dict):
+                data = err.get("data")
+                if isinstance(data, dict):
+                    message = data.get("message")
+                message = message or err.get("message")
+            self.error = str(message or err)
+            self.state = self.state or "failed"
+            return None
+
+        if "data" in body:
+            self.result = body["data"]
+        else:
+            # Not the documented envelope - keep the body rather than dropping it.
+            self.result = body
+        self.state = self.state or "completed"
+        return self.result
+
+    def check(self) -> Optional[Any]:
+        """
+        Perform a single non-blocking poll for this run's result.
+
+        Returns the flow output if the run has completed, otherwise None (which
+        means "not ready yet" - inspect ``self.state`` / ``self.error`` to tell a
+        pending run apart from a failed one).
+        """
+        if self.done:
+            return self.result
+
+        if not self.instance_id:
+            print(
+                "WXOFlowRun.check: no instance_id available, cannot poll. "
+                "Use ingest_callback() with the callback payload instead."
+            )
+            return None
+
+        self.checks_performed += 1
+
+        # Send flow_id alongside instance_id: both are independent filters on the
+        # same endpoint, and narrowing server-side keeps the positional fallback
+        # below from ever reaching an unrelated flow's run.
+        instances = self.client.get_wxo_flows(
+            flow_id=self.flow_id,
+            instance_id=self.instance_id,
+            root_only=False,
+        )
+        if not instances:
+            return None
+
+        # Prefer an explicit id match; the instance object's schema is not
+        # specified, so the id field may be absent or named differently.
+        match = None
+        for inst in instances:
+            if not isinstance(inst, dict):
+                continue
+            ident = inst.get("instance_id") or inst.get("id")
+            if ident == self.instance_id:
+                match = inst
+                break
+
+        if match is None:
+            # No id field to match on. Trust the server-side filters only when
+            # they narrowed to a single run - with several rows back, the filters
+            # clearly did not apply and picking one would be a guess.
+            dicts = [i for i in instances if isinstance(i, dict)]
+            if len(dicts) == 1 and not any(
+                k in dicts[0] for k in ("instance_id", "id")
+            ):
+                match = dicts[0]
+            elif len(dicts) > 1:
+                print(
+                    f"WXOFlowRun.check: {len(dicts)} instances returned for "
+                    f"instance_id={self.instance_id!r} and none carry a matching "
+                    "id field - cannot identify this run, skipping this poll."
+                )
+
+        if match is None:
+            return None
+
+        self._absorb_instance(match)
+        return self.result
+
+    def retrieve(
+        self,
+        interval: Optional[float] = None,
+        max_checks: Optional[int] = None,
+        progress_bar: Optional[bool] = None,
+    ) -> Optional[Any]:
+        """
+        Poll until the run finishes, the check budget runs out, or it fails.
+
+        Parameters
+        ----------
+        interval:
+            Seconds between polls. Defaults to the ``retrieve_interval`` given at
+            submission.
+        max_checks:
+            Maximum number of polls. Defaults to the ``max_checks`` given at
+            submission. Values below 1 are treated as 1. Exhausting the budget
+            does not cancel the flow - call ``retrieve`` again later to keep
+            waiting.
+        progress_bar:
+            Show a marimo progress bar over the polls. Defaults to the client's
+            ``progress_bar`` setting.
+
+        Returns
+        -------
+        The flow output on success, None if the run failed or has not finished
+        within the budget.
+        """
+        if self.done:
+            return self.result
+
+        import time
+
+        interval = self.default_interval if interval is None else interval
+        budget = self.default_max_checks if max_checks is None else max_checks
+        try:
+            budget = max(int(budget), 1)
+        except TypeError, ValueError:
+            print(
+                f"WXOFlowRun.retrieve: max_checks must be an integer, got "
+                f"{max_checks!r}. Using 1."
+            )
+            budget = 1
+
+        bar = self.client._progress_bar_cm(
+            progress_bar,
+            total=budget,
+            title="Awaiting flow result",
+            subtitle=f"instance {self.instance_id}",
+        )
+
+        with bar as _update:
+            for attempt in range(budget):
+                # Wait before every poll except the first - a just-submitted flow
+                # is rarely ready, but a handle retrieved later may already be.
+                if attempt:
+                    time.sleep(interval)
+
+                self.check()
+                _update()
+
+                if self.done:
+                    break
+
+        if not self.done:
+            print(
+                f"WXOFlowRun.retrieve: flow {self.flow_id} (instance "
+                f"{self.instance_id}) still {self.state or 'in_progress'} after "
+                f"{budget} check(s). The run continues server-side - call "
+                "retrieve() or check() again later."
+            )
+        elif self.error:
+            print(f"WXOFlowRun.retrieve: flow run failed: {self.error}")
+
+        return self.result

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App(width="full")
 
 with app.setup(hide_code=True):
@@ -311,9 +311,10 @@ def _():
 
 
 @app.cell
-def _(flow_run_test, flow_selection_dropdown):
+def _(flow_run_test, flow_selection_dropdown, run_flow_async):
     test_stack = mo.hstack(
-        [flow_selection_dropdown, flow_run_test], justify="space-around"
+        [flow_selection_dropdown, run_flow_async, flow_run_test],
+        justify="space-around",
     )
     return (test_stack,)
 
@@ -373,7 +374,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_ids_unique,)
 
@@ -385,7 +386,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (account_ids_unique,)
 
@@ -397,7 +398,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (user_emails,)
 
@@ -435,7 +436,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_structure,)
 
@@ -449,7 +450,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_details,)
 
@@ -463,7 +464,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine
+        engine=postgresql_engine,
     )
     return (quiz_scoring,)
 
@@ -519,8 +520,34 @@ def _(test_stack):
 
 
 @app.cell
-def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
-    if flow_run_test.value and flow_selection_dropdown.value:
+def _():
+    run_flow_async = mo.ui.switch(label="**Run Flow Async**", value=False)
+    return (run_flow_async,)
+
+
+@app.cell
+def _(
+    flow_run_test,
+    flow_selection_dropdown,
+    flows_client,
+    run_flow_async,
+    test_flow,
+):
+    if (
+        flow_run_test.value
+        and flow_selection_dropdown.value
+        and run_flow_async.value
+    ):
+        flow_invoke = flows_client.run_wxo_flow_async(
+            flow_id=flow_selection_dropdown.value,
+            flow_input=test_flow,
+            retries=1,
+            auto_retrieve=True,
+            retrieve_interval=10,
+            max_checks=3,
+        )
+        flow_result = flow_invoke.retrieve()
+    elif flow_run_test.value and flow_selection_dropdown.value:
         flow_result = flows_client.run_wxo_flow(
             flow_id=flow_selection_dropdown.value,
             flow_input=test_flow,
@@ -528,7 +555,19 @@ def _(flow_run_test, flow_selection_dropdown, flows_client, test_flow):
         )
     else:
         flow_result = {}
-    return (flow_result,)
+    return flow_invoke, flow_result
+
+
+@app.cell
+def _(flow_invoke, flow_run_test):
+    flow_invoke if flow_run_test.value else None
+    return
+
+
+@app.cell
+def _(flow_result):
+    flow_result
+    return
 
 
 @app.cell
