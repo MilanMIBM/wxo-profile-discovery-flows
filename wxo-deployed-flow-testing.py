@@ -555,19 +555,7 @@ def _(
         )
     else:
         flow_result = {}
-    return flow_invoke, flow_result
-
-
-@app.cell
-def _(flow_invoke, flow_run_test):
-    flow_invoke if flow_run_test.value else None
-    return
-
-
-@app.cell
-def _(flow_result):
-    flow_result
-    return
+    return (flow_result,)
 
 
 @app.cell
