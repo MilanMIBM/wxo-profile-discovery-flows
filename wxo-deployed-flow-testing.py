@@ -217,22 +217,24 @@ def _(pg_endpoint):
 @app.cell
 def _(ibmcloud_cert_path, mongodb_endpoint):
     if ibmcloud_cert_path:
-        mongodb = MongoClient(
+        mongodb_client = MongoClient(
             mongodb_endpoint,
             tls=True,
             tlsCAFile=ibmcloud_cert_path or None,
         )
-        print(mongodb.get_default_database())
+        mongodb = mongodb_client.get_default_database()
+        print(mongodb)
         print(
-            f"Existing MongoDB collections: {mongodb.database.list_collection_names()}"
+            f"Existing MongoDB collections: {mongodb.list_collection_names()}"
         )
     else:
-        mongodb = MongoClient(mongodb_endpoint)
-        print(mongodb.get_default_database())
+        mongodb_client = MongoClient(mongodb_endpoint)
+        mongodb = mongodb_client.get_default_database()
+        print(mongodb)
         print(
-            f"Existing MongoDB collections: {mongodb.database.list_collection_names()}"
+            f"Existing MongoDB collections: {mongodb.list_collection_names()}"
         )
-    return (mongodb,)
+    return mongodb, mongodb_client
 
 
 @app.cell
@@ -631,7 +633,9 @@ def _(
         mongodb_import_docs = upload_documents(
             mongodb,
             mongodb_collection_name,
-            flow_result.get("enriched_profiles") or [],
+            flow_result.get("enriched_profiles")
+            or flow_result.get("rows")
+            or [],
             check_for_existing="respondent_id",
             on_existing=str(on_existing_documents.value) or "overwrite",
             clean=True,
@@ -671,8 +675,17 @@ def _(retrieve_documents_test):
 
 
 @app.cell
-def _(mongodb, mongodb_collection_name, retrieve_documents_test):
-    if mongodb and mongodb_collection_name and retrieve_documents_test.value:
+def _(
+    mongodb,
+    mongodb_client,
+    mongodb_collection_name,
+    retrieve_documents_test,
+):
+    if (
+        mongodb_client
+        and mongodb_collection_name
+        and retrieve_documents_test.value
+    ):
         retrieve_mongodb_documents = retrieve_documents(
             mongodb, mongodb_collection_name
         )

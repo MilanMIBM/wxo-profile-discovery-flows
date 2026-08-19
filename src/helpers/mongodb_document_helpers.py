@@ -111,6 +111,11 @@ def _batched(items: Sequence[Any], batch_size: int) -> Iterator[Sequence[Any]]:
         yield items[start : start + batch_size]
 
 
+# Sentinel marking an absent path, so a stored ``None`` stays distinguishable
+# from a key that was never there.
+_MISSING = object()
+
+
 def _stringify_ids(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Convert non-string ``_id`` values (e.g. ObjectId) to ``str`` in place."""
     for doc in docs:
@@ -850,3 +855,165 @@ def retrieve_documents(
         cursor = cursor.limit(limit)
 
     return _stringify_ids(list(cursor))
+
+
+def pluck_document_values(
+    items: Optional[Sequence[Any]],
+    path: str,
+    default: Any = None,
+    skip_missing: bool = False,
+) -> List[Any]:
+    """Return *path* from each dict in *items*, like ``.get()`` mapped over the list.
+
+    Pairs with :func:`retrieve_documents` for pulling one field out of a result
+    set, and works on any nested list of dicts::
+
+        docs = retrieve_documents(mongodb, "respondents")
+        pluck_document_values(docs, "identity.email", skip_missing=True)
+        pluck_document_values(docs[0]["quizzes"], "title")
+
+    A dotted path stops at the first list it meets, so ``"quizzes.title"``
+    across whole documents yields *default* - pluck the list first, then the
+    field within it.
+
+    Args:
+        items: List of dicts (``None`` is treated as empty). Entries that are
+            not dicts, or that lack the path, yield *default*.
+        path: Key name, or a dotted path (``"identity.email"``) for nested dicts.
+        default: Value used when the path is absent. A stored ``None`` counts as
+            present and is returned as-is.
+        skip_missing: Drop absent entries instead of emitting *default*, so the
+            result is no longer positionally aligned with *items*.
+
+    Returns:
+        List of the retrieved values.
+    """
+    keys = path.split(".")
+    plucked: List[Any] = []
+
+    for item in items or []:
+        value: Any = item
+        for key in keys:
+            value = value[key] if isinstance(value, dict) and key in value else _MISSING
+            if value is _MISSING:
+                break
+        if value is not _MISSING:
+            plucked.append(value)
+        elif not skip_missing:
+            plucked.append(default)
+
+    return plucked
+
+
+def _walk_field_paths(
+    value: Any,
+    prefix: str,
+    depth: int,
+    seen: Dict[str, Dict[str, Any]],
+) -> None:
+    """Record every dotted path reachable under *value* into *seen*.
+
+    Lists are descended into rather than treated as leaves, so the fields of a
+    list of dicts (``quizzes[].title``) are reported as ``quizzes.title``. Each
+    entry tracks the value types met at that path and how many documents it
+    occurred in.
+    """
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            entry = seen.setdefault(
+                path,
+                {"path": path, "depth": depth, "types": set(), "count": 0},
+            )
+            entry["count"] += 1
+            entry["types"].add(type(child).__name__)
+            _walk_field_paths(child, path, depth + 1, seen)
+    elif isinstance(value, list):
+        # The list itself is already recorded by the caller; recurse into its
+        # dict entries under the same prefix so nested fields surface.
+        for item in value:
+            if isinstance(item, (dict, list)):
+                _walk_field_paths(item, prefix, depth, seen)
+
+
+def discover_document_fields(
+    items: Optional[Sequence[Any]],
+    sample_size: int = 50,
+    max_depth: int = 0,
+) -> "Any":
+    """Map every field path present in *items* into a DataFrame of the schema.
+
+    Walks the documents and reports each dotted path that occurs at least once,
+    descending through nested dicts and through lists of dicts. Use it to see
+    what :func:`retrieve_documents` can actually project, or to populate a field
+    picker::
+
+        docs = retrieve_documents(mongodb, "respondents", limit=0)
+        schema = discover_document_fields(docs)
+        schema[schema["level_1"].notna()]          # nested paths only
+        schema["path"].tolist()                    # every projectable field
+
+    Args:
+        items: Documents to inspect (``None`` is treated as empty).
+        sample_size: How many documents to walk. Defaults to 50; pass 0 to walk
+            every document. Fields appearing only in unsampled documents are
+            missed, so raise it when the collection is ragged.
+        max_depth: Deepest nesting level to report, counting the top level as 1.
+            0 (default) means no limit.
+
+    Returns:
+        A ``pandas.DataFrame`` with one row per field path, sorted by path.
+        Columns: ``path`` (full dotted name), ``level_0`` .. ``level_n`` (the
+        path split into its segments, ``None`` past the path's own depth),
+        ``depth``, ``types`` (comma-separated value types seen), ``count``
+        (occurrences across the sampled documents), and ``coverage`` (that count
+        as a fraction of the documents sampled).
+
+    Raises:
+        ValueError: When *sample_size* or *max_depth* is negative.
+    """
+    if sample_size < 0:
+        raise ValueError("sample_size must be >= 0 (0 means every document).")
+    if max_depth < 0:
+        raise ValueError("max_depth must be >= 0 (0 means no limit).")
+
+    import pandas as pd
+
+    documents = list(items or [])
+    if sample_size:
+        documents = documents[:sample_size]
+
+    seen: Dict[str, Dict[str, Any]] = {}
+    for document in documents:
+        if isinstance(document, (dict, list)):
+            _walk_field_paths(document, "", 1, seen)
+
+    entries = sorted(seen.values(), key=lambda entry: entry["path"])
+    if max_depth:
+        entries = [entry for entry in entries if entry["depth"] <= max_depth]
+
+    if not entries:
+        return pd.DataFrame(
+            columns=["path", "level_0", "depth", "types", "count", "coverage"]
+        )
+
+    widest = max(entry["path"].count(".") for entry in entries) + 1
+    sampled = len(documents) or 1
+
+    rows = []
+    for entry in entries:
+        segments = entry["path"].split(".")
+        row = {"path": entry["path"]}
+        row.update(
+            {
+                f"level_{i}": segments[i] if i < len(segments) else None
+                for i in range(widest)
+            }
+        )
+        row["depth"] = entry["depth"]
+        row["types"] = ", ".join(sorted(entry["types"]))
+        row["count"] = entry["count"]
+        row["coverage"] = round(entry["count"] / sampled, 3)
+        rows.append(row)
+
+    return pd.DataFrame(rows)

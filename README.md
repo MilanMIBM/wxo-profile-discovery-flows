@@ -20,8 +20,8 @@ Notebooks call [`ensure_wxo_env`](src/helpers/ensure_wxo_env.py) in their setup 
 ```bash
 marimo edit                                                        # Opens up the general view allowing you to launch/edit any of the notebooks
 marimo edit wxo-flow-drafting/assemble_build_profiles_flow_v3.py   # author / build a flow
-marimo edit wxo-deployed-flow-testing.py                           # test what's deployed
-marimo run  wxo-deployed-flow-testing.py                           # read-only app view, no code
+marimo edit wxo_deployed_flow_testing.py                           # test what's deployed
+marimo run  wxo_deployed_flow_testing.py                           # read-only app view, no code
 ```
 
 Run them from the repo root - paths like `config/.env` and `src/flow_specs/` are resolved relative to it.
@@ -65,7 +65,7 @@ The assembly notebooks end with an `import_flow_to_wxo` cell behind a run button
 
 A parallel foreach gives each iteration its own copy of flow state and merges by whole-object replacement, so anything a logic block writes to shared state gets clobbered by whichever branch commits last - measured on a 40-iteration run, a `flow.private` list kept 8 records and per-iteration context keys kept 1, with every iteration completing without error. [`foreach_collector`](src/helpers/foreach_collector.py) builds a script node that walks `parent.<loop_name>.output` (the one surface that exposes every iteration) and pulls out one record per iteration. Reach for it whenever a loop body produces something you need all of.
 
-## `wxo-deployed-flow-testing.py` - testing what's deployed
+## `wxo_deployed_flow_testing.py` - testing what's deployed
 
 A standalone marimo app for exercising flows that are already live in the environment, separate from the drafting loop. It lets you:
 
@@ -76,12 +76,19 @@ A standalone marimo app for exercising flows that are already live in the enviro
 
 This is the notebook to reach for when a flow is deployed and you want to know whether it behaves - the assembly notebooks handle up to and including import, this one takes over after.
 
+## `mongodb_retrieval_and_filtering_example.py` - querying what landed
+
+A small standalone marimo notebook at the repo root, showing how to read documents back out of MongoDB with the [`src/helpers/mongodb_document_helpers.py`](src/helpers/mongodb_document_helpers.py) functions. You pick a collection and set fields, selectors, and sorting through UI inputs, then preview the results as cards or a dataframe.
+
+It isn't part of the flow pipeline - use it as a reference for the retrieval helpers, or as a quick way to inspect a collection.
+
 ## What's where
 
 | Path                                                         | Contents                                                                                                                                           |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [wxo-flow-drafting/](wxo-flow-drafting/)                     | node + assembly notebooks (the main working area)                                                                                                  |
-| [wxo-deployed-flow-testing.py](wxo-deployed-flow-testing.py) | deployed-flow test app                                                                                                                             |
+| [wxo_deployed_flow_testing.py](wxo_deployed_flow_testing.py) | deployed-flow test app                                                                                                                             |
+| [mongodb_retrieval_and_filtering_example.py](mongodb_retrieval_and_filtering_example.py) | example notebook for querying MongoDB collections                                                                              |
 | [src/helpers/](src/helpers/)                                 | env activation, tool import, foreach collection, inference client, MongoDB document helpers, marimo UI helpers                                     |
 | [src/tools/](src/tools/)                                     | standalone Orchestrate Python tools (`fetch_url_data`, `retrieve-database-tables`, `upload-enriched-profile`), each with its own requirements file |
 | [src/flow_specs/](src/flow_specs/)                           | compiled flow JSON, written by the assembly notebooks                                                                                              |
@@ -95,4 +102,4 @@ This is the notebook to reach for when a flow is deployed and you want to know w
 1. Author or edit a logic block, python tool, prompt nodes, etc. in their dedicated `wxo_*_node.py` notebook, test them there against real rows.
 2. Open the current assembly notebook, re-run the cell that imports the block and the cell that builds the flow.
 3. Hit the import button - tools go up first, then the compiled flow spec.
-4. Switch to `wxo-deployed-flow-testing.py` to run it end-to-end and check the output lands in MongoDB.
+4. Switch to `wxo_deployed_flow_testing.py` to run it end-to-end and check the output lands in MongoDB.
