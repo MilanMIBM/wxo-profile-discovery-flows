@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App(width="columns")
 
 with app.setup:
@@ -204,7 +204,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_structure,)
 
@@ -218,7 +218,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_details,)
 
@@ -232,7 +232,7 @@ def _(postgresql_engine, quiz_meta):
         LIMIT 1000
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_scoring,)
 
@@ -252,7 +252,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "quiz_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_ids_unique,)
 
@@ -264,7 +264,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "account_id" FROM "quiz_meta"
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (account_ids_unique,)
 
@@ -276,7 +276,7 @@ def _(postgresql_engine):
         SELECT DISTINCT "email" FROM "quiz_scoring"
         """,
         output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (user_emails,)
 

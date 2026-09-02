@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App(width="columns")
 
 with app.setup:
@@ -145,7 +145,7 @@ def _(postgresql_engine):
         f"""
         SELECT DISTINCT "prize.prize_name", "prize.prize_url" FROM "quiz_meta" WHERE "prize.prize_url" IS NOT NULL
         """,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (prize_urls,)
 

@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.23.16"
+__generated_with = "0.24.0"
 app = marimo.App(width="columns")
 
 with app.setup:
@@ -174,7 +174,9 @@ def _(postgresql_engine):
             print(f"{name}: dropping existing table")
 
             with postgresql_engine.begin() as connection:
-                connection.execute(text(f'DROP TABLE IF EXISTS "{name}" CASCADE'))
+                connection.execute(
+                    text(f'DROP TABLE IF EXISTS "{name}" CASCADE')
+                )
             existing.remove(name)
 
         df = pd.read_csv(csv_path)
@@ -209,7 +211,9 @@ def _():
 
 @app.cell
 def _(retrieve_number, select_account):
-    filter_stack = mo.hstack([select_account, retrieve_number], justify="space-around")
+    filter_stack = mo.hstack(
+        [select_account, retrieve_number], justify="space-around"
+    )
     # filter_stack
     return (filter_stack,)
 
@@ -246,8 +250,7 @@ def _(postgresql_engine, quiz_meta):
         WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
-        output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_structure,)
 
@@ -260,8 +263,7 @@ def _(postgresql_engine, quiz_meta):
         WHERE "quiz_id" IN ({",".join(map(repr, quiz_meta["quiz_id"].to_list())) or "NULL"})
         LIMIT 1000
         """,
-        output=False,
-        engine=postgresql_engine,
+        engine=postgresql_engine
     )
     return (quiz_details,)
 
@@ -344,7 +346,11 @@ def _(prize_urls):
 def as_table_entry(name, df):
     """Shape a dataframe like one `retrieve_database_tables` result entry."""
     # mo.sql returns pandas here (.to_dict(orient="records")), but returns polars, (.to_dicts()) when marimo's dataframe backend is switched, so accept both.
-    rows = df.to_dicts() if hasattr(df, "to_dicts") else df.to_dict(orient="records")
+    rows = (
+        df.to_dicts()
+        if hasattr(df, "to_dicts")
+        else df.to_dict(orient="records")
+    )
     return {
         "table": name,
         "rows": [jsonable_row(r) for r in rows],
@@ -369,10 +375,16 @@ def jsonable_row(row):
             return val
         if isinstance(val, float):
             # NaN != NaN; NaN and inf are both unrepresentable in JSON.
-            return None if val != val or val in (float("inf"), float("-inf")) else val
+            return (
+                None
+                if val != val or val in (float("inf"), float("-inf"))
+                else val
+            )
         if isinstance(val, decimal.Decimal):
             return float(val)
-        if isinstance(val, (datetime.datetime, datetime.date, datetime.time)):
+        if isinstance(
+            val, (datetime.datetime, datetime.date, datetime.time)
+        ):
             return val.isoformat()
         if isinstance(val, (bytes, bytearray, memoryview)):
             b = bytes(val)
@@ -473,8 +485,12 @@ class PrizeItem(BaseModel):
     brand_tags: List[str] = Field(
         default_factory=list, description="Brand descriptor tags."
     )
-    language: Optional[str] = Field(default=None, description="Language of the quiz.")
-    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
+    language: Optional[str] = Field(
+        default=None, description="Language of the quiz."
+    )
+    prize_name: Optional[str] = Field(
+        default=None, description="Name of the prize."
+    )
     prize_url: Optional[str] = Field(
         default=None,
         description="Prize page url, or empty when the catalogue has none.",
@@ -654,8 +670,12 @@ def stage_prize_inputs(flow, self, parent, json):
     self.output.prize_currency = prize.get("prize_currency") or ""
     self.output.language = prize.get("language") or ""
 
-    self.output.tag_type = flow["input"].get("tag_type") or "type, purpose, audience"
-    self.output.number_of_tags = int(flow["input"].get("number_of_tags") or 8)
+    self.output.tag_type = (
+        flow["input"].get("tag_type") or "type, purpose, audience"
+    )
+    self.output.number_of_tags = int(
+        flow["input"].get("number_of_tags") or 8
+    )
     self.output.preview_inputs = prize
 
 
@@ -738,7 +758,11 @@ def _():
         )
 
         tags_obj = parent.prize_metadata_tag_generation.output.tags or {}
-        tags = tags_obj.get("metadata_tags") if isinstance(tags_obj, dict) else None
+        tags = (
+            tags_obj.get("metadata_tags")
+            if isinstance(tags_obj, dict)
+            else None
+        )
         tags = [tag for tag in tags if tag] if isinstance(tags, list) else []
 
         self.output.quiz_id = prize.get("quiz_id")
@@ -770,7 +794,9 @@ class EnrichedPrizeOutput(BaseModel):
     quiz_id: Optional[str] = Field(
         default=None, description="Id of the quiz the prize belongs to."
     )
-    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
+    prize_name: Optional[str] = Field(
+        default=None, description="Name of the prize."
+    )
     prize_description: Optional[str] = Field(
         default=None,
         description="Original object prize description, if present.",
@@ -877,7 +903,9 @@ def _(PrizeTableOutputs):
 
             rows_out.append(
                 {
-                    "quiz_id": text(entry.get("quiz_id") or prize.get("quiz_id")),
+                    "quiz_id": text(
+                        entry.get("quiz_id") or prize.get("quiz_id")
+                    ),
                     "title": text(prize.get("title")),
                     "brand_name": text(prize.get("brand_name")),
                     "language": text(prize.get("language")),
@@ -888,7 +916,9 @@ def _(PrizeTableOutputs):
                     "prize_value": text(prize.get("prize_value")),
                     "prize_currency": text(prize.get("prize_currency")),
                     "prize_description": text(entry.get("prize_description")),
-                    "generated_description": text(entry.get("generated_description")),
+                    "generated_description": text(
+                        entry.get("generated_description")
+                    ),
                     "metadata_tags": tags(entry.get("metadata_tags")),
                     "brand_tags": tags(prize.get("brand_tags")),
                     "prize_type": tags(prize.get("prize_type")),
@@ -950,8 +980,12 @@ class EnrichedPrizeTableRow(BaseModel):
     brand_name: Optional[str] = Field(
         default=None, description="Brand that provides the prize."
     )
-    language: Optional[str] = Field(default=None, description="Language of the quiz.")
-    prize_name: Optional[str] = Field(default=None, description="Name of the prize.")
+    language: Optional[str] = Field(
+        default=None, description="Language of the quiz."
+    )
+    prize_name: Optional[str] = Field(
+        default=None, description="Name of the prize."
+    )
     prize_url: Optional[str] = Field(
         default=None,
         description="Prize page url, empty when the catalogue has none.",
@@ -1042,7 +1076,9 @@ class PrizeFlowOutput(BaseModel):
         default_factory=list,
         description="One flat row per prize, ready to load straight into a dataframe.",
     )
-    row_count: int = Field(default=0, description="How many prize rows were produced.")
+    row_count: int = Field(
+        default=0, description="How many prize rows were produced."
+    )
 
 
 @app.cell
@@ -1088,7 +1124,9 @@ def _(
             "max_retries": 1,
             "retry_interval": 3000,
         }
-        fetch = each.tool(fetch_url_data, error_handler_config=fetch_retry_setup)
+        fetch = each.tool(
+            fetch_url_data, error_handler_config=fetch_retry_setup
+        )
 
         fetch.map_input(
             "urls",
@@ -1132,7 +1170,9 @@ def _(
         )
 
         # Both sit OUTSIDE the loop. The collector reads the loop's aggregate rather than shared state, which does not survive the parallel branch merge.
-        gather = collect_enriched_prizes(aflow, output_schema=CollectedPrizesOutput)
+        gather = collect_enriched_prizes(
+            aflow, output_schema=CollectedPrizesOutput
+        )
 
         table = build_prize_table(aflow)
 
@@ -1330,7 +1370,9 @@ def _(flow_name, flow_selection):
         value=(
             flow_name
             if flow_name in flow_selection
-            else (next(iter(flow_selection)) if len(flow_selection) > 0 else None)
+            else (
+                next(iter(flow_selection)) if len(flow_selection) > 0 else None
+            )
         ),
     )
     return (flow_selection_dropdown,)
